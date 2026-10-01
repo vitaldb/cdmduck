@@ -10,7 +10,7 @@ Everything else gets 401 (not from the gateway) or 403 (user not allowed).
 import os
 import threading
 
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 USER_HEADERS = ('X-Auth-User-ID', 'User-ID', 'X-Auth-Subject')
 
@@ -26,6 +26,8 @@ class Gateway:
         self._mtime = None
         self._lock = threading.Lock()
         self.log_file = log_file
+        self.denied_message = ('Access is limited to researchers with an approved data review (DRB) for this '
+                               'data source. Please contact the data steward to be added.')
 
     def allowed_users(self):
         if not self.allow_file:
@@ -76,11 +78,20 @@ class Gateway:
                                       status_code=403)
         return user, None
 
+    DENIED_PAGE = (
+        '<!doctype html><meta charset="utf-8"><title>DuckCDM</title>'
+        '<body style="font-family:sans-serif;max-width:40em;margin:4em auto;line-height:1.6">'
+        '<h2>DuckCDM</h2><p>{msg}</p></body>')
+
     def install(self, app):
         @app.middleware('http')
         async def _gate(request, call_next):
             user, err = self.identify(request)
             if err is not None:
-                return err
+                if request.url.path.startswith('/WebAPI') or 'text/html' not in request.headers.get('accept', ''):
+                    return err
+                msg = (self.denied_message if err.status_code == 403 else
+                       'This service is only available through the institutional research portal.')
+                return HTMLResponse(self.DENIED_PAGE.format(msg=msg), status_code=err.status_code)
             request.state.user = user
             return await call_next(request)
