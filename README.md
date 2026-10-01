@@ -44,6 +44,7 @@ duckcdm serve EUNOMIA=cdm.duckdb --achilles   # ATLAS 3.0 + WebAPI; build Achill
 duckcdm views /data/cdm_parquet cdm.duckdb    # Parquet folder (one sub-folder per table) -> OMOP views
 duckcdm views /data/cdm_parquet cdm.duckdb --materialize   # ... or native DuckDB tables (much faster)
 duckcdm achilles cdm.duckdb                   # Achilles results for the data-source reports only
+duckcdm export-parquet cdm.duckdb out/        # CDM -> sorted, year-partitioned Parquet (fast to query)
 duckcdm cohort cohort.json duckdb --cdm main --results main --cohort-id 1
 duckcdm translate query.sql postgresql -p cdm=main
 duckcdm dialects

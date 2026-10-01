@@ -74,3 +74,64 @@ def create_parquet_views(con, root, schema='main', versions=('5.4', '5.3'), log=
 
 def safe_name(s):
     return re.sub(r'[^A-Za-z0-9_]', '_', s)
+
+
+# Sort keys for export_parquet: the domain concept first (cohort SQL filters by concept sets, so sorted
+# row groups let DuckDB skip most of a table), then person_id.
+SORT_KEYS = {
+    'person': ['person_id'], 'observation_period': ['person_id'], 'death': ['person_id'],
+    'visit_occurrence': ['visit_concept_id', 'person_id'], 'visit_detail': ['visit_detail_concept_id', 'person_id'],
+    'condition_occurrence': ['condition_concept_id', 'person_id'], 'drug_exposure': ['drug_concept_id', 'person_id'],
+    'procedure_occurrence': ['procedure_concept_id', 'person_id'], 'device_exposure': ['device_concept_id', 'person_id'],
+    'measurement': ['measurement_concept_id', 'person_id'], 'observation': ['observation_concept_id', 'person_id'],
+    'specimen': ['specimen_concept_id', 'person_id'], 'note': ['person_id'],
+    'condition_era': ['condition_concept_id', 'person_id'], 'drug_era': ['drug_concept_id', 'person_id'],
+    'dose_era': ['drug_concept_id', 'person_id'],
+    'concept': ['concept_id'], 'concept_ancestor': ['ancestor_concept_id', 'descendant_concept_id'],
+    'concept_relationship': ['concept_id_1', 'relationship_id'], 'concept_synonym': ['concept_id'],
+    'source_to_concept_map': ['source_code'], 'drug_strength': ['drug_concept_id'],
+}
+# Year partitioning by the event date, so each year can be sorted on its own.
+PARTITION_DATE = {
+    'visit_occurrence': 'visit_start_date', 'visit_detail': 'visit_detail_start_date',
+    'condition_occurrence': 'condition_start_date', 'drug_exposure': 'drug_exposure_start_date',
+    'procedure_occurrence': 'procedure_date', 'device_exposure': 'device_exposure_start_date',
+    'measurement': 'measurement_date', 'observation': 'observation_date', 'specimen': 'specimen_date',
+    'note': 'note_date', 'condition_era': 'condition_era_start_date', 'drug_era': 'drug_era_start_date',
+    'dose_era': 'dose_era_start_date',
+}
+
+
+def export_parquet(con, schema, outdir, tables=None, row_group_size=122880, log=print):
+    """Write schema.<table> (views or tables) to outdir/<table>/[year=Y/]data.parquet, sorted by SORT_KEYS.
+    Large event tables are written one year at a time (bounded memory); other tables as a single file."""
+    import time
+    os.makedirs(outdir, exist_ok=True)
+    have = {r[0] for r in con.execute(
+        'select table_name from information_schema.tables where table_schema = ?', [schema]).fetchall()}
+    for table in (tables or list(cdm_fields())):
+        if table not in have:
+            continue
+        n = con.execute(f'SELECT count(*) FROM {schema}.{table}').fetchone()[0]
+        if n == 0:
+            continue
+        t0 = time.time()
+        order = ', '.join(SORT_KEYS.get(table, [])) or '1'
+        tdir = os.path.join(outdir, table)
+        os.makedirs(tdir, exist_ok=True)
+        opts = f"(FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE {int(row_group_size)})"
+        date = PARTITION_DATE.get(table)
+        if date:
+            years = [r[0] for r in con.execute(
+                f'SELECT DISTINCT year({date}) FROM {schema}.{table} ORDER BY 1').fetchall()]
+            for y in years:
+                ydir = os.path.join(tdir, f'year={y if y is not None else "__null__"}')
+                os.makedirs(ydir, exist_ok=True)
+                cond = f'year({date}) = {int(y)}' if y is not None else f'{date} IS NULL'
+                con.execute(f"COPY (SELECT * FROM {schema}.{table} WHERE {cond} ORDER BY {order}) "
+                            f"TO '{os.path.join(ydir, 'data.parquet')}' {opts}")
+        else:
+            con.execute(f"COPY (SELECT * FROM {schema}.{table} ORDER BY {order}) "
+                        f"TO '{os.path.join(tdir, 'data.parquet')}' {opts}")
+        if log:
+            log(f'  {table:<24} {n:>14,} rows  {time.time() - t0:7.0f}s')

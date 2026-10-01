@@ -34,7 +34,7 @@ Equivalence was tested by running the original Java code and the port on the sam
 - Parquet-based CDMs: `duckcdm views` maps a Parquet folder to OMOP views exposing only the standard CDM 5.3/5.4 columns.
 - A Python-native SqlRender/Circe for pipelines that already live in Python.
 
-We are now deploying it on our hospital-scale CDM (≈4 million persons, Parquet) behind our institutional research gateway, for approved researchers only.
+We have tested it on our hospital-scale CDM at Seoul National University Hospital (≈4 million persons; 3.1 billion measurement rows) and now run it behind our institutional research gateway for approved researchers. Loading the Parquet CDM into DuckDB took about an hour and the 110 Achilles analyses about two hours on a shared server (4 threads, 8 GB). PhenotypeLibrary cohorts generate in seconds (e.g. 171k persons in 5 s), and in about two minutes when a criterion scans the full measurement table.
 
 **Not yet implemented:** characterization, incidence rates, pathways, version history, tags, and multi-user security (we rely on a gateway for authentication).
 

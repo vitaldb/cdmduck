@@ -41,6 +41,13 @@ def main(argv=None):
                     help='copy into native DuckDB tables instead of views (much faster queries; uses disk)')
     vw.add_argument('--memory-limit', default=None, help='DuckDB memory_limit (e.g. 8GB)')
     vw.add_argument('--threads', type=int, default=None, help='DuckDB threads')
+    ex = sub.add_parser('export-parquet', help='write a CDM (DuckDB views or tables) to sorted, year-partitioned Parquet')
+    ex.add_argument('db')
+    ex.add_argument('outdir')
+    ex.add_argument('--schema', default='main')
+    ex.add_argument('--tables', default='', help='comma-separated tables (default: all OMOP tables present)')
+    ex.add_argument('--memory-limit', default=None)
+    ex.add_argument('--threads', type=int, default=None)
     ac = sub.add_parser('achilles', help='Compute Achilles analyses for data source reports in DuckDB')
     ac.add_argument('db')
     ac.add_argument('--memory-limit', default=None, help='DuckDB memory_limit (e.g. 8GB)')
@@ -107,6 +114,18 @@ def main(argv=None):
         create_parquet_views(con, os.path.abspath(a.parquet_dir), a.schema,
                              log=lambda m: print(m, flush=True), materialize=a.materialize)
         con.close()
+        return 0
+    if a.cmd == 'export-parquet':
+        import duckdb
+        from .omop import export_parquet
+        con = duckdb.connect(a.db, read_only=True)
+        if a.memory_limit:
+            con.execute(f"SET memory_limit = '{a.memory_limit}'")
+        if a.threads:
+            con.execute(f'SET threads = {int(a.threads)}')
+        con.execute('SET preserve_insertion_order = false')
+        export_parquet(con, a.schema, os.path.abspath(a.outdir),
+                       [t for t in a.tables.split(',') if t] or None, log=lambda m: print(m, flush=True))
         return 0
     if a.cmd == 'achilles':
         import time
