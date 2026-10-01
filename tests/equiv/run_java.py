@@ -4,8 +4,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 CASES, OUT, NPROC = sys.argv[1], sys.argv[2], int(sys.argv[3])
 TIMEOUT = float(sys.argv[4]) if len(sys.argv) > 4 else 30
-HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'java')
-CSV = os.path.abspath(os.path.join(HERE, '..', '..', 'src', 'cdmduck', 'sqlrender', 'csv', 'replacementPatterns.csv'))
+HERE = os.environ.get('HARNESS_DIR') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'java')
+CSV = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'src', 'cdmduck', 'sqlrender',
+                                   'csv', 'replacementPatterns.csv'))
+# Circe 처럼 다른 하네스: HARNESS_DIR, HARNESS_MAIN, HARNESS_CP(추가 classpath), 인자 없음
+MAIN = os.environ.get('HARNESS_MAIN', 'Harness.java')
+CP = '.' + (':' + os.environ['HARNESS_CP'] if os.environ.get('HARNESS_CP') else '')
+ARGS = [] if os.environ.get('HARNESS_MAIN') else [CSV]
 lines = open(CASES).read().splitlines(keepends=True)
 
 
@@ -13,7 +18,7 @@ def run_chunk(chunk):
     res = []
     i = 0
     while i < len(chunk):
-        p = subprocess.Popen(['java', '-Xss64m', '-cp', '.', 'Harness.java', CSV], cwd=HERE, stdin=subprocess.PIPE,
+        p = subprocess.Popen(['java', '-Xss64m', '-cp', CP, MAIN] + ARGS, cwd=HERE, stderr=subprocess.DEVNULL, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, text=True, bufsize=1)
         def feed(rest=chunk[i:]):
             try:

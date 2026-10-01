@@ -7,3 +7,10 @@ Sciences and Informatics, licensed under the Apache License, Version 2.0:
   - src/cdmduck/sqlrender (Python port of org.ohdsi.sql.*)
   - src/cdmduck/sqlrender/csv/replacementPatterns.csv (verbatim)
   - ref/java, tests/java/org (verbatim Java reference sources)
+
+This product includes software derived from OHDSI circe-be
+(https://github.com/OHDSI/circe-be), Copyright Observational Health Data
+Sciences and Informatics, licensed under the Apache License, Version 2.0:
+  - src/cdmduck/circe (Python port of org.ohdsi.circe cohort SQL generation)
+  - src/cdmduck/circe/sql (SQL templates, verbatim)
+  - tests/java_circe/org, tests/java_circe/resources (verbatim Java reference sources)
