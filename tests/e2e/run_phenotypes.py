@@ -24,7 +24,9 @@ for f in files:
     try:
         sql = build_cohort_query(open(f, encoding='utf-8').read(), cdm_schema='main', target_table='main.cohort',
                                  result_schema='main', vocabulary_schema='main', cohort_id=cid, generate_stats=False)
+        t_build = time.time() - t1
         sql = translate(render(sql), 'duckdb')
+        t_tr = time.time() - t1 - t_build
         for stmt in split_sql(sql):
             if stmt.strip():
                 con.execute(stmt)
@@ -38,6 +40,8 @@ for f in files:
         dt = time.time() - t1
         if dt > 5:
             slow.append((cid, round(dt, 1)))
+        print(cid, round(dt, 2), 'build/translate', round(locals().get('t_build', 0), 2),
+              round(locals().get('t_tr', 0), 2), 'len', len(locals().get('sql', '')), flush=True)
         con.close()
 print(f'ok {ok} / {len(files)}  fail {len(fail)}  {time.time() - t0:.1f}s')
 print('cohorts with persons:', sum(1 for v in persons.values() if v), 'max', max(persons.values(), default=0))

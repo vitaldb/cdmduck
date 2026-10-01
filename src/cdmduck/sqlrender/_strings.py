@@ -1,6 +1,5 @@
 """org.ohdsi.sql.StringUtils · SqlSplit 포팅."""
 import re
-from bisect import bisect_left, bisect_right
 from collections import OrderedDict
 
 from ._java import JavaError, char_at, is_letter_or_digit, is_whitespace, substring
@@ -91,19 +90,22 @@ class Tokens:
         return [self.token(i) for i in range(len(self.texts))]
 
 
-def _scan(sql, pos, state, texts, starts, ends, states, resync=None):
-    """pos 부터 state(따옴표 상태)로 훑어 리스트에 덧붙인다. resync(x, state) 가 참을 돌려주면 x 에서 멈추고 True."""
+def _scan(sql, pos, state, texts, starts, ends, states, limit=None):
+    """pos 부터 state(따옴표 상태: 1=작은, 2=큰)로 훑어 평행 리스트에 덧붙인다.
+    limit 개 토큰을 만들면 (pos, state) 를 돌려주고(이어서 훑을 수 있음), 끝까지 가면 None."""
     in_single, in_double = bool(state & 1), bool(state & 2)
     n = len(sql)
     match = _TOKEN_RE.match
+    made = 0
     while pos < n:
+        if limit is not None and made >= limit:
+            return pos, in_single | (in_double << 1)
         m = match(sql, pos)
         word = m.group(1)
         st = in_single | (in_double << 1)
         if word is not None:
-            if resync is not None and resync(pos, st):
-                return True
             texts.append(word); starts.append(pos); ends.append(m.end()); states.append(st)
+            made += 1
             pos = m.end()
             continue
         ch = m.group(2)
@@ -124,43 +126,37 @@ def _scan(sql, pos, state, texts, starts, ends, states, resync=None):
                 break
             pos = e + 2
             continue
-        if resync is not None and resync(pos, st):
-            return True
         texts.append(ch); starts.append(pos); ends.append(pos + 1); states.append(st)
+        made += 1
         if ch == "'" and not in_double:
             in_single = not in_single
         if ch == '"' and not in_single:
             in_double = not in_double
         pos += 1
-    return False
+    return None
 
 
-def _common_prefix(a, b):
-    lo, hi = 0, min(len(a), len(b))
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if a[:mid] == b[:mid]:
-            lo = mid
-        else:
-            hi = mid - 1
-    return lo
+class LazyTokens:
+    """offset 부터 필요한 만큼만 토큰화한다. search 는 처음 일치하는 곳에서 돌아오므로 그 뒤는 만들 필요가 없다.
+    토큰 번호는 offset 에서 시작하는 상대 번호. offset 은 토큰 시작 자리(정상 상태)여야 한다."""
+    __slots__ = ('sql', 'texts', 'starts', 'ends', 'states', 'pos', 'state', 'n')
+    CHUNK = 512
 
+    def __init__(self, sql, offset=0, state=0):
+        self.sql = sql
+        self.texts, self.starts, self.ends, self.states = [], [], [], []
+        self.pos, self.state, self.n = offset, state, 0
 
-def _common_suffix(a, b, limit):
-    lo, hi = 0, limit
-    la, lb = len(a), len(b)
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if a[la - mid:] == b[lb - mid:]:
-            lo = mid
-        else:
-            hi = mid - 1
-    return lo
-
-
-_LOOKAHEAD = 6          # 토크나이저가 앞을 내다보는 최대 글자 수('--hint' 판정)
-_recent = OrderedDict()
-_last_big = None          # 증분 토큰화의 기준: 가장 최근에 토큰화한 긴 문자열
+    def ensure(self, i):
+        """i 번 토큰이 있으면 True (필요하면 더 만든다)."""
+        while i >= self.n and self.pos is not None:
+            r = _scan(self.sql, self.pos, self.state, self.texts, self.starts, self.ends, self.states, self.CHUNK)
+            if r is None:
+                self.pos = None
+            else:
+                self.pos, self.state = r
+            self.n = len(self.texts)
+        return i < self.n
 
 
 def _tokenize_full(sql):
@@ -169,58 +165,16 @@ def _tokenize_full(sql):
     return Tokens(sql, texts, starts, ends, states)
 
 
-def _tokenize_incremental(sql, old):
-    """old(최근에 토큰화한 문자열)과 공통 앞·뒤를 재사용하고 바뀐 부분만 다시 훑는다."""
-    o = old.sql
-    cp = _common_prefix(o, sql)
-    cs = _common_suffix(o, sql, min(len(o), len(sql)) - cp)
-    # 재개 지점: 시작+내다보기가 공통 앞부분 안에 드는 마지막 토큰 → 그 앞의 모든 판정이 두 문자열에서 같다
-    k = bisect_right(old.starts, cp - _LOOKAHEAD) - 1
-    if k < 0:
-        k = 0
-        pos, state = 0, 0
-    else:
-        pos, state = old.starts[k], old.states[k]
-    texts, starts, ends, states = old.texts[:k], old.starts[:k], old.ends[:k], old.states[:k]
-    d = len(sql) - len(o)
-    tail_from = len(sql) - cs
-    hit = []
-
-    def resync(x, st):
-        if x < tail_from:
-            return False
-        y = x - d
-        j = bisect_left(old.starts, y)
-        if j < len(old.starts) and old.starts[j] == y and old.states[j] == st:
-            hit.append(j)
-            return True
-        return False
-
-    if _scan(sql, pos, state, texts, starts, ends, states, resync):
-        j = hit[0]
-        texts.extend(old.texts[j:])
-        states.extend(old.states[j:])
-        if d:
-            starts.extend([x + d for x in old.starts[j:]])
-            ends.extend([x + d for x in old.ends[j:]])
-        else:
-            starts.extend(old.starts[j:])
-            ends.extend(old.ends[j:])
-    return Tokens(sql, texts, starts, ends, states)
+_recent = OrderedDict()
 
 
 def tokenize(sql):
-    """Tokens 를 돌려준다(읽기 전용으로 쓸 것). 같은 문자열·조금 바뀐 문자열을 되풀이해 토큰화하는 search 용."""
+    """Tokens 를 돌려준다(읽기 전용으로 쓸 것). 같은 문자열을 되풀이해 토큰화하는 호출을 위해 캐시한다."""
     t = _recent.get(sql)
     if t is not None:
         _recent.move_to_end(sql)
         return t
-    global _last_big
-    if len(sql) > 2000:
-        t = _tokenize_incremental(sql, _last_big) if _last_big is not None else _tokenize_full(sql)
-        _last_big = t
-    else:
-        t = _tokenize_full(sql)
+    t = _tokenize_full(sql)
     _recent[sql] = t
     if len(_recent) > 16:
         _recent.popitem(last=False)

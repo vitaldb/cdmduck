@@ -7,7 +7,10 @@ from functools import lru_cache
 
 from ._java import (JavaError, hash_order, is_letter, is_letter_or_digit, remove_blank_lines,
                     strip_ws_before_end, substring, trim)
-from ._strings import Token, replace_all, replace_with_concat, safe_split, split_sql, tokenize, tokenize_sql
+from bisect import bisect_left
+
+from ._strings import (LazyTokens, Token, _scan, replace_all, replace_with_concat, safe_split, split_sql, tokenize,
+                       tokenize_sql)
 
 SESSION_ID_LENGTH = 8
 MAX_TABLE_NAME_LENGTH = 63
@@ -30,11 +33,12 @@ class Block(Token):
 
 
 class MatchedPattern:
-    __slots__ = ('start', 'end', 'start_token', 'variable_to_value')
+    __slots__ = ('start', 'end', 'start_token', 'variable_to_value', 'tokens')
 
     def __init__(self):
         self.start = self.end = self.start_token = 0
         self.variable_to_value = {}          # 삽입 순서 보존 → hash_order 로 Java HashMap 순서 재현
+        self.tokens = None
 
 
 @lru_cache(maxsize=None)
@@ -99,18 +103,24 @@ def _matches_end(regex, s):
     return start
 
 
-def search(sql, pp, start_token):
-    tk = tokenize(sql.lower())
+def search(sql, pp, start_token, offset=0, state=0):
+    """SqlTranslate.search. offset/state 를 주면 그 자리(토큰 시작, 따옴표 상태)부터의 상대 토큰 번호로 찾는다 —
+    그 앞의 토큰은 Java 도 들여다보지 않으므로 결과가 같다. 토큰은 일치하는 곳까지만 만든다."""
+    if sql and sql[-1] in '-/':
+        tokenize(sql.lower())           # Java 는 전체를 먼저 토큰화하다 끝 글자에서 예외를 던진다
+    tk = LazyTokens(sql.lower(), offset, state)
     texts, starts, ends, states = tk.texts, tk.starts, tk.ends, tk.states
-    n_tok, n_pp = len(texts), len(pp)
+    ensure = tk.ensure
+    n_pp = len(pp)
     match_count = 0
     var_start = 0
     nest = []
     in_pq = False
     mp = MatchedPattern()
+    mp.tokens = tk
     vv = mp.variable_to_value
     cursor = start_token
-    while cursor < n_tok:
+    while ensure(cursor):
         t_text, t_start = texts[cursor], starts[cursor]
         blk = pp[match_count]
         if blk.is_variable:
@@ -128,7 +138,7 @@ def search(sql, pp, start_token):
                         return mp
                     elif pp[match_count].is_variable:
                         var_start = t_start + m.end()
-                    while cursor < n_tok and starts[cursor] < t_start + m.end():
+                    while ensure(cursor) and starts[cursor] < t_start + m.end():
                         cursor += 1
                     cursor -= 1
                 else:
@@ -145,7 +155,7 @@ def search(sql, pp, start_token):
                             mp.end = ends[cursor]
                             return mp
                         elif pp[match_count].is_variable:
-                            var_start = starts[cursor + 1] if cursor < n_tok - 1 else -1
+                            var_start = starts[cursor + 1] if ensure(cursor + 1) else -1
                         if t_text == "'":
                             in_pq = not in_pq
                 elif blk.regex is not None and not _matches(blk.regex, substring(sql, var_start, t_start)):
@@ -158,7 +168,7 @@ def search(sql, pp, start_token):
                         mp.end = ends[cursor]
                         return mp
                     elif pp[match_count].is_variable:
-                        var_start = starts[cursor + 1] if cursor < n_tok - 1 else -1
+                        var_start = starts[cursor + 1] if ensure(cursor + 1) else -1
                     if t_text == "'":
                         in_pq = not in_pq
             elif match_count != 0 and not nest and not in_pq and t_text in (';', ')'):
@@ -186,13 +196,13 @@ def search(sql, pp, start_token):
                     mp.end = ends[cursor]
                     return mp
                 elif pp[match_count].is_variable:
-                    var_start = starts[cursor + 1] if cursor < n_tok - 1 else -1
+                    var_start = starts[cursor + 1] if ensure(cursor + 1) else -1
                 if t_text in ("'", '"'):
                     in_pq = not in_pq
             elif match_count != 0:
                 match_count = 0
                 cursor = mp.start_token
-        if match_count != 0 and cursor == n_tok - 1:
+        if match_count != 0 and not ensure(cursor + 1):
             match_count = 0
             cursor = mp.start_token
         cursor += 1
@@ -200,26 +210,60 @@ def search(sql, pp, start_token):
     return mp
 
 
+def _next_offset(new_sql, tk, mp, offset, state, target):
+    """치환 뒤 새 문자열에서 상대 토큰 target(= startToken + delta) 의 (시작 위치, 그 앞 따옴표 상태).
+    mp.start 앞에서 시작하는 토큰들은 그대로이므로 마지막 그런 토큰부터 다시 훑어 번호를 센다. 없으면 None."""
+    c = bisect_left(tk.starts, mp.start)      # mp.start 앞에서 시작하는(이미 만든) 토큰 수
+    if c == 0:
+        p0, st, base = offset, state, 0
+    else:
+        p0, st, base = tk.starts[c - 1], tk.states[c - 1], c - 1
+    if target < base:                           # 이미 만든 앞쪽 토큰 (바뀌지 않은 부분)
+        return tk.starts[target], tk.states[target]
+    texts, starts, ends, states = [], [], [], []
+    low = new_sql.lower()
+    r = _scan(low, p0, st, texts, starts, ends, states, target - base + 1)
+    i = target - base
+    if i < len(starts):
+        return starts[i], states[i]
+    return None
+
+
 def _search_and_replace(sql, pp, replace_pattern):
-    mp = search(sql, pp, 0)
+    # 패턴의 글자 토큰이 문자열에 아예 없으면 일치할 수 없다
+    low = sql.lower()
+    for blk in pp:
+        if not blk.is_variable and blk.text not in low:
+            return sql
+    offset, state = 0, 0
+    mp = search(sql, pp, 0, offset, state)
     while mp.start != -1:
         replacement = replace_pattern
         vv = mp.variable_to_value
         for k in hash_order(list(vv)):
             replacement = replace_all(replacement, k, vv[k])
-        sql = substring(sql, 0, mp.start) + replacement + substring(sql, mp.end)
+        new_sql = substring(sql, 0, mp.start) + replacement + substring(sql, mp.end)
         delta = 1 if len(tokenize(replacement)) else 0
         # 치환문이 변수로 시작하고 그 값이 검색 패턴 첫 토큰으로 시작하면 첫 토큰을 건너뛰지 않는다
         if delta > 0 and replace_pattern.startswith('@@') and trim(replacement.lower()).startswith(pp[0].text):
             delta = 0
-        mp = search(sql, pp, mp.start_token + delta)
+        nxt = _next_offset(new_sql, mp.tokens, mp, offset, state, mp.start_token + delta)
+        sql = new_sql
+        if nxt is None:                       # 그 번호의 토큰이 없다 → Java 의 search 도 바로 -1
+            break
+        offset, state = nxt
+        mp = search(sql, pp, 0, offset, state)
     return sql
 
 
 def _translate(sql, patterns, session_id, temp_prefix):
+    first = True
     for search_p, repl_p in patterns:
         repl_p = repl_p.replace('%session_id%', session_id).replace('%temp_prefix%', temp_prefix)
-        sql = remove_blank_lines(_search_and_replace(sql, _parse_search_pattern(search_p), repl_p))
+        new = _search_and_replace(sql, _parse_search_pattern(search_p), repl_p)
+        if first or new is not sql:           # 빈 줄 제거는 멱등이라 바뀐 것이 없으면 생략해도 같다
+            sql = remove_blank_lines(new)
+            first = False
     return remove_blank_lines(sql)
 
 
