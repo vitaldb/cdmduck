@@ -29,6 +29,7 @@ def main(argv=None):
     sv.add_argument('--gateway-ip', default='172.23.', help='comma-separated trusted peer address prefixes')
     sv.add_argument('--gateway-marker', default='X-Auth-Method=parent_gateway',
                     help='HEADER=VALUE the gateway always sets ("" to disable)')
+    sv.add_argument('--gateway-log', help='append one JSON audit line per request (peer, verdict, identity headers)')
     sv.add_argument('--allow-users', help='file with one allowed user id per line (re-read when it changes)')
     sv.add_argument('--achilles', action='store_true', help='Compute Achilles results at startup if missing (for data source reports)')
     vw = sub.add_parser('views', help='Parquet directory (one subfolder per table) -> DuckDB file of views with only the OMOP standard columns')
@@ -79,7 +80,7 @@ def main(argv=None):
         if a.gateway:
             from .webapi.gateway import Gateway
             name, _, value = a.gateway_marker.partition('=')
-            gw = Gateway(a.gateway_ip.split(','), name or None, value, a.allow_users)
+            gw = Gateway(a.gateway_ip.split(','), name or None, value, a.allow_users, a.gateway_log)
         app = create_app(sources, Store(store_path, a.user), gateway=gw)
         print(f'duckcdm {__import__("duckcdm").__version__}: http://{a.host}:{a.port}/  (API: /WebAPI, store: {store_path})')
         uvicorn.run(app, host=a.host, port=a.port, log_level='warning')

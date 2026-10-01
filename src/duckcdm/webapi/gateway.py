@@ -17,7 +17,7 @@ USER_HEADERS = ('X-Auth-User-ID', 'User-ID', 'X-Auth-Subject')
 
 class Gateway:
     def __init__(self, trusted_prefixes=('172.23.',), marker_header='X-Auth-Method', marker_value='parent_gateway',
-                 allow_file=None):
+                 allow_file=None, log_file=None):
         self.trusted = tuple(p for p in trusted_prefixes if p)
         self.marker_header = marker_header
         self.marker_value = marker_value
@@ -25,6 +25,7 @@ class Gateway:
         self._allow = set()
         self._mtime = None
         self._lock = threading.Lock()
+        self.log_file = log_file
 
     def allowed_users(self):
         if not self.allow_file:
@@ -40,7 +41,26 @@ class Gateway:
                 self._mtime = m
             return self._allow
 
+    def _log(self, request, peer, verdict):
+        """Audit line: time, peer, verdict, path, identity-related headers and the names of all other headers."""
+        if not self.log_file:
+            return
+        import json
+        import time
+        h = request.headers
+        ident = {k: v for k, v in h.items() if k.lower().startswith(('x-auth', 'user-', 'x-forwarded', 'x-real-ip'))}
+        rec = {'t': time.strftime('%Y-%m-%d %H:%M:%S'), 'peer': peer, 'verdict': verdict, 'path': request.url.path,
+               'identity': ident, 'headers': sorted(k for k in h.keys() if k not in ident)}
+        with self._lock, open(self.log_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + '\n')
+
     def identify(self, request):
+        user, err = self._identify(request)
+        self._log(request, request.client.host if request.client else '',
+                  'ok' if err is None else str(err.status_code))
+        return user, err
+
+    def _identify(self, request):
         """(user id, None) or (None, error response)."""
         peer = request.client.host if request.client else ''
         if not peer.startswith(self.trusted):
