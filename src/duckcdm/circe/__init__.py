@@ -1,6 +1,6 @@
 """OHDSI circe-be 의 파이썬 이식 — 코호트 정의(JSON) → OHDSI SQL. Java 판과 출력이 글자 단위로 같다.
 
-    from cdmduck.circe import build_cohort_query
+    from duckcdm.circe import build_cohort_query
     sql = build_cohort_query(cohort_json, cdm_schema="main", target_table="main.cohort", cohort_id=1)
 """
 from ._jutil import CirceError

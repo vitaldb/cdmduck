@@ -1,25 +1,28 @@
-cdmduck
-Copyright 2026 cdmduck authors
+duckcdm
+Copyright 2026 duckcdm authors
 
 This product includes software and data derived from OHDSI SqlRender
 (https://github.com/OHDSI/SqlRender), Copyright Observational Health Data
 Sciences and Informatics, licensed under the Apache License, Version 2.0:
-  - src/cdmduck/sqlrender (Python port of org.ohdsi.sql.*)
-  - src/cdmduck/sqlrender/csv/replacementPatterns.csv (verbatim)
+  - src/duckcdm/sqlrender (Python port of org.ohdsi.sql.*)
+  - src/duckcdm/sqlrender/csv/replacementPatterns.csv (verbatim)
   - ref/java, tests/java/org (verbatim Java reference sources)
 
 This product includes software derived from OHDSI circe-be
 (https://github.com/OHDSI/circe-be), Copyright Observational Health Data
 Sciences and Informatics, licensed under the Apache License, Version 2.0:
-  - src/cdmduck/circe (Python port of org.ohdsi.circe cohort SQL generation)
-  - src/cdmduck/circe/sql (SQL templates, verbatim)
+  - src/duckcdm/circe (Python port of org.ohdsi.circe cohort SQL generation)
+  - src/duckcdm/circe/sql (SQL templates, verbatim)
   - tests/java_circe/org, tests/java_circe/resources (verbatim Java reference sources)
 
 This product bundles a built copy of OHDSI Atlas3 (https://github.com/OHDSI/Atlas3),
 Copyright Observational Health Data Sciences and Informatics, Apache License 2.0,
-in src/cdmduck/webapi/static/atlas (unmodified build; config/plugins.json emptied), and
+in src/duckcdm/webapi/static/atlas (unmodified build; config/plugins.json emptied), and
 SQL resources from OHDSI WebAPI (https://github.com/OHDSI/WebAPI, branch webapi-3.0),
-Apache License 2.0, in src/cdmduck/webapi/sql.
+Apache License 2.0, in src/duckcdm/webapi/sql.
 
 This product includes SQL and CSV resources from OHDSI Achilles (https://github.com/OHDSI/Achilles),
-Apache License 2.0, in src/cdmduck/achilles.
+Apache License 2.0, in src/duckcdm/achilles.
+
+src/duckcdm/omop/cdm_fields.csv is derived from OHDSI CommonDataModel field-level
+specifications (https://github.com/OHDSI/CommonDataModel), Apache License 2.0.

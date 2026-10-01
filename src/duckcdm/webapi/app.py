@@ -65,7 +65,7 @@ def _merge_related(rows):
     return out
 
 
-def create_app(sources, store, title='cdmduck'):
+def create_app(sources, store, title='duckcdm'):
     app = FastAPI(title=title, version=__version__, docs_url='/WebAPI/docs', openapi_url='/WebAPI/openapi.json')
     by_key = {s.key: s for s in sources}
     by_id = {s.source_id: s for s in sources}
@@ -84,11 +84,11 @@ def create_app(sources, store, title='cdmduck'):
     # ---- 기본 정보 ------------------------------------------------------------
     @app.get('/WebAPI/info')
     def info():
-        return {'version': '3.0.0', 'buildInfo': {'artifactVersion': 'cdmduck ' + __version__, 'branch': 'main',
+        return {'version': '3.0.0', 'buildInfo': {'artifactVersion': 'duckcdm ' + __version__, 'branch': 'main',
                                                   'commitId': '', 'buildTimestamp': ''},
                 'configuration': {'security': {'enabled': False}, 'vocabulary': {'solr': {'enabled': False}},
                                   'person': {'viewDatesPermitted': True}, 'plp': {'enabled': False},
-                                  'heracles': {'smallCellCount': 5}, 'cdmduck': {'version': __version__}}}
+                                  'heracles': {'smallCellCount': 5}, 'duckcdm': {'version': __version__}}}
 
     @app.get('/WebAPI/user/me')
     def user_me():
@@ -277,7 +277,7 @@ def create_app(sources, store, title='cdmduck'):
         src(key)
         r = reports[key]
         if not r.ready():
-            raise HTTPException(404, 'Achilles results not built for this source: run "cdmduck achilles" '
+            raise HTTPException(404, 'Achilles results not built for this source: run "duckcdm achilles" '
                                      'or POST /WebAPI/cdmresults/{key}/achilles')
         return r
 

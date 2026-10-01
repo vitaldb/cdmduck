@@ -40,7 +40,7 @@ class Source:
     읽기는 cursor() 로 나눠 쓴다."""
 
     def __init__(self, source_id, key, name, path, cdm_schema='main', vocab_schema=None, results_schema='results',
-                 read_only=False):
+                 read_only=False, memory_limit=None, threads=None):
         self.source_id = source_id
         self.key = key
         self.name = name
@@ -51,6 +51,10 @@ class Source:
         self.dialect = 'duckdb'
         self.lock = threading.RLock()
         self.con = duckdb.connect(path, read_only=read_only)
+        if memory_limit:
+            self.con.execute(f"SET memory_limit = '{memory_limit}'")
+        if threads:
+            self.con.execute(f'SET threads = {int(threads)}')
         if not read_only:
             self.init_results()
 

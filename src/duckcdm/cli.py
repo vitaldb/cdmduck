@@ -1,10 +1,11 @@
-"""명령어 `cdmduck`."""
+"""명령어 `duckcdm`."""
 import argparse
+import os
 import sys
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog='cdmduck', description='OMOP CDM / ATLAS-compatible tools on DuckDB')
+    ap = argparse.ArgumentParser(prog='duckcdm', description='OMOP CDM / ATLAS-compatible tools on DuckDB')
     sub = ap.add_subparsers(dest='cmd', required=True)
     t = sub.add_parser('translate', help='SQL Server 방언 SQL 을 대상 방언으로 번역')
     t.add_argument('file', help="SQL 파일 ('-' 는 표준입력)")
@@ -14,16 +15,24 @@ def main(argv=None):
     sub.add_parser('dialects', help='지원 방언 목록')
     sv = sub.add_parser('serve', help='ATLAS 3.0 화면 + WebAPI 호환 서버 (DuckDB)')
     sv.add_argument('db', nargs='+', help='CDM DuckDB 파일 (여러 개 가능; KEY=경로 로 소스 키 지정)')
+    sv.add_argument('--memory-limit', default=None, help='DuckDB memory_limit (예: 8GB)')
+    sv.add_argument('--threads', type=int, default=None, help='DuckDB threads')
     sv.add_argument('--cdm', default='main', help='CDM 스키마 (기본 main)')
     sv.add_argument('--vocab', help='어휘 스키마 (기본: CDM 스키마)')
     sv.add_argument('--results', default='results', help='결과 스키마 (기본 results, 없으면 만든다)')
-    sv.add_argument('--store', help='개념집합·코호트 정의 저장 파일 (기본: 첫 DB 옆 cdmduck_store.duckdb)')
+    sv.add_argument('--store', help='개념집합·코호트 정의 저장 파일 (기본: 첫 DB 옆 duckcdm_store.duckdb)')
     sv.add_argument('--host', default='127.0.0.1')
     sv.add_argument('--port', type=int, default=8080)
     sv.add_argument('--user', default='admin')
     sv.add_argument('--achilles', action='store_true', help='Achilles 결과가 없으면 시작할 때 계산 (데이터 소스 보고서용)')
+    vw = sub.add_parser('views', help='parquet 디렉터리(표마다 하위 폴더) → OMOP 표준 열만 담은 DuckDB 뷰 파일')
+    vw.add_argument('parquet_dir')
+    vw.add_argument('db', help='만들 DuckDB 파일 (뷰와 결과 스키마만 담긴다)')
+    vw.add_argument('--schema', default='main')
     ac = sub.add_parser('achilles', help='데이터 소스 보고서용 Achilles 분석을 DuckDB 에서 계산')
     ac.add_argument('db')
+    ac.add_argument('--memory-limit', default=None, help='DuckDB memory_limit (예: 8GB)')
+    ac.add_argument('--threads', type=int, default=None, help='DuckDB threads')
     ac.add_argument('--cdm', default='main')
     ac.add_argument('--vocab')
     ac.add_argument('--results', default='results')
@@ -41,7 +50,6 @@ def main(argv=None):
     a = ap.parse_args(argv)
     from .sqlrender import dialects, render, translate
     if a.cmd == 'serve':
-        import os
         import uvicorn
         from .webapi.app import create_app
         from .webapi.sources import Source
@@ -50,7 +58,8 @@ def main(argv=None):
         for i, spec in enumerate(a.db, 1):
             key, _, path = spec.rpartition('=') if '=' in spec else ('', '', spec)
             key = key or os.path.splitext(os.path.basename(path))[0].upper()
-            sources.append(Source(i, key, key, path, a.cdm, a.vocab, a.results))
+            sources.append(Source(i, key, key, path, a.cdm, a.vocab, a.results, memory_limit=a.memory_limit,
+                                  threads=a.threads))
         if a.achilles:
             from .webapi.reports import Reports
             for s in sources:
@@ -59,10 +68,17 @@ def main(argv=None):
                     print(f'{s.key}: Achilles 분석 계산 중…')
                     done, failed = r.build()
                     print(f'{s.key}: {len(done)} 분석 완료, 실패 {len(failed)}')
-        store_path = a.store or os.path.join(os.path.dirname(os.path.abspath(sources[0].path)), 'cdmduck_store.duckdb')
+        store_path = a.store or os.path.join(os.path.dirname(os.path.abspath(sources[0].path)), 'duckcdm_store.duckdb')
         app = create_app(sources, Store(store_path, a.user))
-        print(f'cdmduck {__import__("cdmduck").__version__}: http://{a.host}:{a.port}/  (API: /WebAPI, store: {store_path})')
+        print(f'duckcdm {__import__("duckcdm").__version__}: http://{a.host}:{a.port}/  (API: /WebAPI, store: {store_path})')
         uvicorn.run(app, host=a.host, port=a.port, log_level='warning')
+        return 0
+    if a.cmd == 'views':
+        import duckdb
+        from .omop import create_parquet_views
+        con = duckdb.connect(a.db)
+        create_parquet_views(con, os.path.abspath(a.parquet_dir), a.schema)
+        con.close()
         return 0
     if a.cmd == 'achilles':
         import time
@@ -71,7 +87,7 @@ def main(argv=None):
         from .webapi.reports import Reports
         from .webapi.sources import Source
         t0 = time.time()
-        src = Source(1, 'CDM', 'CDM', a.db, a.cdm, a.vocab, a.results)
+        src = Source(1, 'CDM', 'CDM', a.db, a.cdm, a.vocab, a.results, memory_limit=a.memory_limit, threads=a.threads)
         done, failed = Reports(src).build(log=print)
         print(f'{len(done)} analyses, {len(failed)} failed, {time.time() - t0:.1f}s')
         for aid, err in failed:

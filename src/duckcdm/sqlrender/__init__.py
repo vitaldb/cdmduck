@@ -1,6 +1,6 @@
 """OHDSI SqlRender 의 파이썬 이식 — Java 판과 출력이 글자 단위로 같도록 맞춘다.
 
-    from cdmduck.sqlrender import render, translate
+    from duckcdm.sqlrender import render, translate
     sql = render("SELECT * FROM @cdm.person {@limit}?{LIMIT 10}", cdm="main", limit=True)
     sql = translate(sql, "duckdb")
 """

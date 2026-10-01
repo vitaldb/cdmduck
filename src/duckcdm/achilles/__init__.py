@@ -1,6 +1,6 @@
-"""OHDSI Achilles 의 분석 SQL 을 그대로 cdmduck 번역기로 DuckDB 에서 돌린다.
+"""OHDSI Achilles 의 분석 SQL 을 그대로 duckcdm 번역기로 DuckDB 에서 돌린다.
 
-    from cdmduck.achilles import run_achilles
+    from duckcdm.achilles import run_achilles
     run_achilles(con, cdm_schema='main', results_schema='results')
 
 결과: <results>.achilles_results, achilles_results_dist, achilles_analysis, achilles_result_concept_count —
@@ -54,7 +54,7 @@ def available(ids=None):
     return [i for i in (ids or REPORT_ANALYSES) if i in have]
 
 
-def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=None, source_name='cdmduck',
+def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=None, source_name='duckcdm',
                  cdm_version='5.3', analysis_ids=None, small_cell_count=5, log=print):
     """분석을 돌려 결과 테이블을 새로 만든다. 돌아가지 않은 분석은 (id, 오류) 목록으로 돌려준다."""
     vocab_schema = vocab_schema or cdm_schema

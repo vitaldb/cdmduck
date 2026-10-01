@@ -26,8 +26,8 @@ def run(line, timeout=30):
 
 
 def _run(line):
-    from cdmduck.sqlrender import _render, _strings, _translate
-    from cdmduck.sqlrender._java import JavaError
+    from duckcdm.sqlrender import _render, _strings, _translate
+    from duckcdm.sqlrender._java import JavaError
     d = lambda s: base64.b64decode(s).decode()
     op, dialect, sql, p = line.rstrip('\n').split('\t')
     try:

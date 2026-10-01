@@ -26,7 +26,7 @@ def run(line, timeout=60):
 
 
 def _run(line):
-    from cdmduck.circe import CirceError, build_cohort_query, build_concept_set_query
+    from duckcdm.circe import CirceError, build_cohort_query, build_concept_set_query
     d = lambda s: base64.b64decode(s).decode()
     op, js, opts = line.rstrip('\n').split('\t')
     try:

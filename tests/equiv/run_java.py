@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 CASES, OUT, NPROC = sys.argv[1], sys.argv[2], int(sys.argv[3])
 TIMEOUT = float(sys.argv[4]) if len(sys.argv) > 4 else 30
 HERE = os.environ.get('HARNESS_DIR') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'java')
-CSV = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'src', 'cdmduck', 'sqlrender',
+CSV = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'src', 'duckcdm', 'sqlrender',
                                    'csv', 'replacementPatterns.csv'))
 # Circe 처럼 다른 하네스: HARNESS_DIR, HARNESS_MAIN, HARNESS_CP(추가 classpath), 인자 없음
 MAIN = os.environ.get('HARNESS_MAIN', 'Harness.java')

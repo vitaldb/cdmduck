@@ -114,7 +114,7 @@ def period():
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
-from cdmduck.circe import _model as M      # noqa: E402  (필드 이름 목록만 쓴다 — Java 와 일치를 앞서 확인)
+from duckcdm.circe import _model as M      # noqa: E402  (필드 이름 목록만 쓴다 — Java 와 일치를 앞서 확인)
 
 CONV_GEN = {M._nr: nrange, M._concepts: concepts, M._cs: cs_sel, M._dr: drange, M._tf: text,
             M.Period.parse: period, M.DateAdjustment.parse: da,

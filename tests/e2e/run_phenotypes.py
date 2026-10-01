@@ -1,4 +1,4 @@
-"""PhenotypeLibrary 코호트를 cdmduck 으로 SQL 생성 → DuckDB 방언 번역 → 실행.
+"""PhenotypeLibrary 코호트를 duckcdm 으로 SQL 생성 → DuckDB 방언 번역 → 실행.
 
 python3 run_phenotypes.py <cdm.duckdb (복사본)> <cohorts dir> [개수]
 """
@@ -6,8 +6,8 @@ import glob, os, sys, threading, time
 
 import duckdb
 
-from cdmduck.circe import build_cohort_query
-from cdmduck.sqlrender import render, split_sql, translate
+from duckcdm.circe import build_cohort_query
+from duckcdm.sqlrender import render, split_sql, translate
 
 db, cdir = sys.argv[1], sys.argv[2]
 limit = int(sys.argv[3]) if len(sys.argv) > 3 else None
@@ -18,19 +18,23 @@ t0 = time.time()
 for f in files:
     cid = int(os.path.basename(f).split('.')[0])
     con = duckdb.connect(db)          # 코호트마다 새 세션(임시 테이블 격리) — WebAPI 와 같다
+    tgt = os.environ.get('E2E_TARGET', 'main.cohort')
+    con.execute(f"CREATE SCHEMA IF NOT EXISTS {tgt.split('.')[0]}")
+    con.execute(f'CREATE TABLE IF NOT EXISTS {tgt} (cohort_definition_id INTEGER, subject_id BIGINT, '
+                'cohort_start_date DATE, cohort_end_date DATE)')
     timer = threading.Timer(TIMEOUT, con.interrupt)
     timer.start()
     t1 = time.time()
     try:
-        sql = build_cohort_query(open(f, encoding='utf-8').read(), cdm_schema='main', target_table='main.cohort',
-                                 result_schema='main', vocabulary_schema='main', cohort_id=cid, generate_stats=False)
+        sql = build_cohort_query(open(f, encoding='utf-8').read(), cdm_schema='main', target_table=tgt,
+                                 result_schema=tgt.split('.')[0], vocabulary_schema='main', cohort_id=cid, generate_stats=False)
         t_build = time.time() - t1
         sql = translate(render(sql), 'duckdb')
         t_tr = time.time() - t1 - t_build
         for stmt in split_sql(sql):
             if stmt.strip():
                 con.execute(stmt)
-        persons[cid] = con.execute('select count(distinct subject_id) from main.cohort where cohort_definition_id = ?',
+        persons[cid] = con.execute(f'select count(distinct subject_id) from {tgt} where cohort_definition_id = ?',
                                    [cid]).fetchone()[0]
         ok += 1
     except Exception as e:
