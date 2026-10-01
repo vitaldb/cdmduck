@@ -36,3 +36,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "cdmduck.sqlrender" = ["csv/*.csv"]
+"cdmduck.circe" = ["sql/*.sql"]
