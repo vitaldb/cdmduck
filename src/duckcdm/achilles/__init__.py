@@ -55,7 +55,8 @@ def available(ids=None):
 
 
 def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=None, source_name='duckcdm',
-                 cdm_version='5.3', analysis_ids=None, small_cell_count=5, log=lambda m: print(m, flush=True)):
+                 cdm_version='5.3', analysis_ids=None, small_cell_count=5, log=lambda m: print(m, flush=True),
+                 resume=False, skip=()):
     """Run the analyses and rebuild the result tables. Returns failed analyses as a list of (id, error)."""
     vocab_schema = vocab_schema or cdm_schema
     details = analysis_details()
@@ -66,7 +67,16 @@ def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=
                   tempEmulationSchema=results_schema, source_name=source_name, achilles_version=ACHILLES_VERSION,
                   cdmVersion=cdm_version, singleThreaded=False)
     done, failed = [], []
+    have = {r[0] for r in con.execute(
+        "select table_name from information_schema.tables where table_schema = ?", [results_schema]).fetchall()}
     for aid in ids:
+        if aid in skip:
+            if log:
+                log(f'  achilles {aid:>5} skipped')
+            continue
+        if resume and (f'{PREFIX}_{aid}' in have or f'{PREFIX}_dist_{aid}' in have):
+            done.append(aid)            # scratch table from an earlier, interrupted run
+            continue
         for t in (f'{PREFIX}_{aid}', f'{PREFIX}_dist_{aid}'):
             con.execute(f'DROP TABLE IF EXISTS {results_schema}.{t}')
         t0 = time.time()

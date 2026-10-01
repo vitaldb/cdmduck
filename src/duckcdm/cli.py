@@ -48,6 +48,9 @@ def main(argv=None):
     ac.add_argument('--cdm', default='main')
     ac.add_argument('--vocab')
     ac.add_argument('--results', default='results')
+    ac.add_argument('--resume', action='store_true',
+                    help='keep analyses finished by an interrupted run (their scratch tables) and run only the rest')
+    ac.add_argument('--skip', default='', help='comma-separated analysis ids to leave out')
     ac.add_argument('--small-cell', type=int, default=5, help='Remove cells with counts at or below this (Achilles default 5)')
     c = sub.add_parser('cohort', help='Cohort definition (ATLAS/Circe JSON) -> target dialect SQL')
     c.add_argument('file', help="Cohort JSON ('-' for stdin)")
@@ -113,7 +116,8 @@ def main(argv=None):
         from .webapi.sources import Source
         t0 = time.time()
         src = Source(1, 'CDM', 'CDM', a.db, a.cdm, a.vocab, a.results, memory_limit=a.memory_limit, threads=a.threads)
-        done, failed = Reports(src).build(log=print)
+        skip = {int(x) for x in a.skip.split(',') if x.strip()}
+        done, failed = Reports(src).build(log=lambda m: print(m, flush=True), resume=a.resume, skip=skip)
         print(f'{len(done)} analyses, {len(failed)} failed, {time.time() - t0:.1f}s')
         for aid, err in failed:
             print('  FAILED', aid, err)

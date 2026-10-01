@@ -117,7 +117,7 @@ class Reports:
                         "table_name = 'achilles_results'", [self.s.results_schema]).fetchone()[0]
         return n > 0
 
-    def build(self, log=None):
+    def build(self, log=None, resume=False, skip=()):
         """Achilles analyses + concept_hierarchy. Repopulates the results schema."""
         s = self.s
         with s.lock:
@@ -128,7 +128,7 @@ class Reports:
             except Exception:
                 pass
             done, failed = run_achilles(cur, s.cdm_schema, s.results_schema, s.vocab_schema, source_name=name,
-                                        log=log)
+                                        log=log, resume=resume, skip=skip)
             ddl = sql_resource('results', 'concept_hierarchy.sql')
             body = ddl[ddl.index('CREATE TABLE'):].replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', 1)
             s.execute_script(render(body, results_schema=s.results_schema), cur)

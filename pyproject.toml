@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "duckcdm"
-version = "0.4.3"
+version = "0.4.4"
 description = "DuckCDM — DuckDB-powered OMOP CDM engine: OHDSI SqlRender, Circe, Achilles and an ATLAS 3.0-compatible WebAPI in pure Python"
 readme = "README.md"
 license = "Apache-2.0"
