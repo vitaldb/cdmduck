@@ -93,7 +93,7 @@ def main(argv=None):
                 gw.denied_message = a.denied_message
         app = create_app(sources, Store(store_path, a.user), gateway=gw)
         print(f'duckcdm {__import__("duckcdm").__version__}: http://{a.host}:{a.port}/  (API: /WebAPI, store: {store_path})')
-        uvicorn.run(app, host=a.host, port=a.port, log_level='warning')
+        uvicorn.run(app, host=a.host, port=a.port, log_level='warning', ws='none')
         return 0
     if a.cmd == 'views':
         import duckdb
