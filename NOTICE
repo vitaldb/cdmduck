@@ -1,0 +1,9 @@
+cdmduck
+Copyright 2026 cdmduck authors
+
+This product includes software and data derived from OHDSI SqlRender
+(https://github.com/OHDSI/SqlRender), Copyright Observational Health Data
+Sciences and Informatics, licensed under the Apache License, Version 2.0:
+  - src/cdmduck/sqlrender (Python port of org.ohdsi.sql.*)
+  - src/cdmduck/sqlrender/csv/replacementPatterns.csv (verbatim)
+  - ref/java, tests/java/org (verbatim Java reference sources)

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cdmduck"
+version = "0.0.1"
+description = "OMOP CDM / OHDSI ATLAS-compatible tools on DuckDB: SqlRender, Circe and a WebAPI-compatible server in pure Python"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.8"
+authors = [{ name = "Hyung-Chul Lee", email = "lucid80@gmail.com" }]
+keywords = ["omop", "cdm", "ohdsi", "atlas", "sqlrender", "circe", "duckdb"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Healthcare Industry",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/vitaldb/cdmduck"
+Source = "https://github.com/vitaldb/cdmduck"
+
+[project.optional-dependencies]
+server = ["duckdb>=1.0", "fastapi", "uvicorn"]
+
+[project.scripts]
+cdmduck = "cdmduck.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"cdmduck.sqlrender" = ["csv/*.csv"]
