@@ -55,7 +55,7 @@ def available(ids=None):
 
 
 def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=None, source_name='duckcdm',
-                 cdm_version='5.3', analysis_ids=None, small_cell_count=5, log=print):
+                 cdm_version='5.3', analysis_ids=None, small_cell_count=5, log=lambda m: print(m, flush=True)):
     """Run the analyses and rebuild the result tables. Returns failed analyses as a list of (id, error)."""
     vocab_schema = vocab_schema or cdm_schema
     details = analysis_details()

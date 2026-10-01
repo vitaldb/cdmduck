@@ -37,6 +37,10 @@ def main(argv=None):
     vw.add_argument('parquet_dir')
     vw.add_argument('db', help='DuckDB file to create (holds only views and the results schema)')
     vw.add_argument('--schema', default='main')
+    vw.add_argument('--materialize', action='store_true',
+                    help='copy into native DuckDB tables instead of views (much faster queries; uses disk)')
+    vw.add_argument('--memory-limit', default=None, help='DuckDB memory_limit (e.g. 8GB)')
+    vw.add_argument('--threads', type=int, default=None, help='DuckDB threads')
     ac = sub.add_parser('achilles', help='Compute Achilles analyses for data source reports in DuckDB')
     ac.add_argument('db')
     ac.add_argument('--memory-limit', default=None, help='DuckDB memory_limit (e.g. 8GB)')
@@ -92,7 +96,13 @@ def main(argv=None):
         import duckdb
         from .omop import create_parquet_views
         con = duckdb.connect(a.db)
-        create_parquet_views(con, os.path.abspath(a.parquet_dir), a.schema)
+        if a.memory_limit:
+            con.execute(f"SET memory_limit = '{a.memory_limit}'")
+        if a.threads:
+            con.execute(f'SET threads = {int(a.threads)}')
+        con.execute('SET preserve_insertion_order = false')
+        create_parquet_views(con, os.path.abspath(a.parquet_dir), a.schema,
+                             log=lambda m: print(m, flush=True), materialize=a.materialize)
         con.close()
         return 0
     if a.cmd == 'achilles':

@@ -36,7 +36,7 @@ def _source(root, table):
     return None
 
 
-def create_parquet_views(con, root, schema='main', versions=('5.4', '5.3'), log=print):
+def create_parquet_views(con, root, schema='main', versions=('5.4', '5.3'), log=print, materialize=False):
     """root/<table>/(**/)*.parquet or root/<table>.parquet -> view schema.<table>. Returns {table: excluded columns}."""
     fields = cdm_fields(versions)
     con.execute(f'CREATE SCHEMA IF NOT EXISTS {schema}')
@@ -47,7 +47,8 @@ def create_parquet_views(con, root, schema='main', versions=('5.4', '5.3'), log=
         src = _source(root, table)
         if src is None:
             sel = ', '.join(f'CAST(NULL AS {t}) AS "{c}"' for c, t in cols)
-            con.execute(f'CREATE OR REPLACE VIEW {schema}.{table} AS SELECT {sel} FROM (SELECT 1) z WHERE 1 = 0')
+            kind = 'TABLE' if materialize else 'VIEW'
+            con.execute(f'CREATE OR REPLACE {kind} {schema}.{table} AS SELECT {sel} FROM (SELECT 1) z WHERE 1 = 0')
             if log:
                 log(f'  {table:<24} (missing -> empty view)')
             continue
@@ -57,7 +58,15 @@ def create_parquet_views(con, root, schema='main', versions=('5.4', '5.3'), log=
         for c, t in cols:
             sel.append(f'"{have[c]}" AS "{c}"' if c in have else f'CAST(NULL AS {t}) AS "{c}"')
         excluded[table] = sorted(set(have) - {c for c, _ in cols})
-        con.execute(f'CREATE OR REPLACE VIEW {schema}.{table} AS SELECT {", ".join(sel)} FROM {reader}')
+        if materialize:
+            import time
+            t0 = time.time()
+            con.execute(f'CREATE OR REPLACE TABLE {schema}.{table} AS SELECT {", ".join(sel)} FROM {reader}')
+            n = con.execute(f'SELECT count(*) FROM {schema}.{table}').fetchone()[0]
+            if log:
+                log(f'  {table:<24} table: {n:,} rows, {time.time() - t0:.0f}s')
+        else:
+            con.execute(f'CREATE OR REPLACE VIEW {schema}.{table} AS SELECT {", ".join(sel)} FROM {reader}')
         if log:
             log(f'  {table:<24} columns {len(cols)}' + (f'  excluded: {", ".join(excluded[table])}' if excluded[table] else ''))
     return excluded
