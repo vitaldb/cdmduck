@@ -1,10 +1,10 @@
-"""OHDSI Achilles 의 분석 SQL 을 그대로 duckcdm 번역기로 DuckDB 에서 돌린다.
+"""Run OHDSI Achilles analysis SQL unchanged on DuckDB via the duckcdm translator.
 
     from duckcdm.achilles import run_achilles
     run_achilles(con, cdm_schema='main', results_schema='results')
 
-결과: <results>.achilles_results, achilles_results_dist, achilles_analysis, achilles_result_concept_count —
-Achilles R 패키지와 같은 테이블이라 WebAPI/ATLAS 의 데이터 소스 보고서 SQL 이 그대로 읽는다.
+Results: <results>.achilles_results, achilles_results_dist, achilles_analysis, achilles_result_concept_count —
+the same tables as the Achilles R package, so WebAPI/ATLAS data source report SQL reads them as is.
 """
 import csv
 import os
@@ -16,7 +16,7 @@ _DIR = os.path.dirname(__file__)
 ACHILLES_VERSION = '1.7.2'
 PREFIX = 'tmpach'
 
-# WebAPI 데이터 소스 보고서가 읽는 분석 + 개념 기록수(achilles_result_concept_count)에 필요한 분석
+# Analyses read by WebAPI data source reports + analyses needed for concept record counts (achilles_result_concept_count)
 REPORT_ANALYSES = [
     0, 1, 2, 3, 4, 5, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 113, 116, 117,
     200, 201, 202, 203, 204, 206, 211, 220, 301, 400, 401, 402, 403, 404, 405, 406, 420,
@@ -56,7 +56,7 @@ def available(ids=None):
 
 def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=None, source_name='duckcdm',
                  cdm_version='5.3', analysis_ids=None, small_cell_count=5, log=print):
-    """분석을 돌려 결과 테이블을 새로 만든다. 돌아가지 않은 분석은 (id, 오류) 목록으로 돌려준다."""
+    """Run the analyses and rebuild the result tables. Returns failed analyses as a list of (id, error)."""
     vocab_schema = vocab_schema or cdm_schema
     details = analysis_details()
     ids = available(analysis_ids)
@@ -75,7 +75,7 @@ def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=
             done.append(aid)
             if log:
                 log(f'  achilles {aid:>5} {time.time() - t0:6.2f}s')
-        except Exception as e:                       # 분석 하나가 실패해도 나머지는 계속 (Achilles 와 같다)
+        except Exception as e:                       # keep going if one analysis fails (same as Achilles)
             failed.append((aid, f'{type(e).__name__}: {str(e).splitlines()[0][:200]}'))
             if log:
                 log(f'  achilles {aid:>5} FAILED {failed[-1][1]}')
@@ -119,12 +119,12 @@ def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=
     return done, failed
 
 
-# 개념별 환자 수 분석(… by concept 의 person 수). WebAPI 의 achilles_result_concept_count 는 PC·DPC 열도 갖는다.
+# Per-concept person count analyses (person counts of '… by concept'). WebAPI's achilles_result_concept_count also has PC and DPC columns.
 PERSON_COUNT_ANALYSES = (200, 400, 600, 700, 800, 900, 1000, 1800, 2100)
 
 
 def _add_person_counts(con, results_schema, vocab_schema):
-    """record_count·descendant_record_count 와 같은 방식(자신=최댓값, 자손=합)으로 person 수를 붙인다."""
+    """Attach person counts the same way as record_count/descendant_record_count (self = max, descendants = sum)."""
     ids = ','.join(map(str, PERSON_COUNT_ANALYSES))
     rs, vs = results_schema, vocab_schema
     con.execute(f"""

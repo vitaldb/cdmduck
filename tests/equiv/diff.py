@@ -1,4 +1,4 @@
-"""java.out 과 py.out 비교. 예외는 둘 다 예외면 일치로 본다(메시지도 비교해 따로 센다)."""
+"""Compare java.out and py.out. Exceptions count as a match if both sides throw (messages are compared and counted separately)."""
 import base64, collections, sys
 
 cases = open(sys.argv[1]).read().splitlines()

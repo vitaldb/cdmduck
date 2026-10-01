@@ -1,6 +1,6 @@
-"""ATLAS 3.0 화면이 부르는 WebAPI 의 부분집합 — FastAPI + DuckDB.
+"""The subset of WebAPI called by the ATLAS 3.0 UI — FastAPI + DuckDB.
 
-경로는 WebAPI 와 같다(/WebAPI/... 아래). 화면(ATLAS 3.0 빌드)은 / 에서 함께 낸다.
+Paths are the same as WebAPI (under /WebAPI/...). The UI (ATLAS 3.0 build) is served alongside at /.
 """
 import json
 import os
@@ -34,7 +34,7 @@ def _ms(d):
 
 
 def concept_json(r):
-    """어휘 SQL 의 한 행 → WebAPI Concept JSON (대문자 키)."""
+    """One row of vocabulary SQL -> WebAPI Concept JSON (uppercase keys)."""
     g = lambda k: r.get(k, r.get(k.lower()))
     sc, ir = g('STANDARD_CONCEPT'), g('INVALID_REASON')
     out = {
@@ -52,7 +52,7 @@ def concept_json(r):
 
 
 def _merge_related(rows):
-    """WebAPI 처럼 같은 개념의 관계를 RELATIONSHIPS 목록으로 합친다."""
+    """Like WebAPI, merge relationships of the same concept into a RELATIONSHIPS list."""
     out, by_id = [], {}
     for r in rows:
         c = concept_json(r)
@@ -65,8 +65,10 @@ def _merge_related(rows):
     return out
 
 
-def create_app(sources, store, title='duckcdm'):
+def create_app(sources, store, title='duckcdm', gateway=None):
     app = FastAPI(title=title, version=__version__, docs_url='/WebAPI/docs', openapi_url='/WebAPI/openapi.json')
+    if gateway is not None:
+        gateway.install(app)
     by_key = {s.key: s for s in sources}
     by_id = {s.source_id: s for s in sources}
     reports = {s.key: Reports(s) for s in sources}
@@ -81,7 +83,7 @@ def create_app(sources, store, title='duckcdm'):
     async def _circe_err(request, exc):
         return JSONResponse({'message': str(exc)}, status_code=400)
 
-    # ---- 기본 정보 ------------------------------------------------------------
+    # ---- basic info --------------------------------------------------------------
     @app.get('/WebAPI/info')
     def info():
         return {'version': '3.0.0', 'buildInfo': {'artifactVersion': 'duckcdm ' + __version__, 'branch': 'main',
@@ -91,8 +93,10 @@ def create_app(sources, store, title='duckcdm'):
                                   'heracles': {'smallCellCount': 5}, 'duckcdm': {'version': __version__}}}
 
     @app.get('/WebAPI/user/me')
-    def user_me():
-        return {'user': store.user, 'authz': {'permissions': ['*'], 'cohortDefinitionAccess': {},
+    def user_me(request: Request):
+        u = getattr(request.state, 'user', None)
+        user = {'id': 1, 'login': u, 'name': u} if u else store.user
+        return {'user': user, 'authz': {'permissions': ['*'], 'cohortDefinitionAccess': {},
                                               'conceptSetAccess': {}, 'sourceAccess': {}}}
 
     @app.get('/WebAPI/permission/')
@@ -114,7 +118,7 @@ def create_app(sources, store, title='duckcdm'):
     def access(entity, eid):
         return []
 
-    # ---- 소스 -----------------------------------------------------------------
+    # ---- sources -----------------------------------------------------------------
     @app.get('/WebAPI/source/sources')
     def list_sources():
         return [s.info() for s in sources]
@@ -137,7 +141,7 @@ def create_app(sources, store, title='duckcdm'):
     def noop_cache(key=None):
         return {}
 
-    # ---- 어휘 -----------------------------------------------------------------
+    # ---- vocabulary --------------------------------------------------------------
     def vocab(key, name, **params):
         s = src(key)
         return s.query_dicts(sql_resource('vocabulary', name), CDM_schema=s.vocab_schema, **params)
@@ -240,7 +244,7 @@ def create_app(sources, store, title='duckcdm'):
         return []
 
     def resolve_expression(s, expression):
-        """개념집합 식 → 포함되는 개념들 (vocabulary SQL 로)."""
+        """Concept set expression -> included concepts (via vocabulary SQL)."""
         inner = build_concept_set_query(expression)
         sql = ('select CONCEPT_ID, CONCEPT_NAME, ISNULL(STANDARD_CONCEPT,\'N\') STANDARD_CONCEPT, '
                'ISNULL(INVALID_REASON,\'V\') INVALID_REASON, CONCEPT_CODE, CONCEPT_CLASS_ID, DOMAIN_ID, VOCABULARY_ID, '
@@ -272,7 +276,7 @@ def create_app(sources, store, title='duckcdm'):
         ).fetchall()
         return [{str(r[0]): [int(x or 0) for x in r[1:]]} for r in rows]
 
-    # ---- 데이터 소스 보고서 (Achilles) ----------------------------------------------
+    # ---- data source reports (Achilles) ------------------------------------------
     def rep(key):
         src(key)
         r = reports[key]
@@ -321,7 +325,7 @@ def create_app(sources, store, title='duckcdm'):
             raise HTTPException(404, f'unknown report domain {domain}')
         return r.drilldown(domain, cid)
 
-    # ---- 개념집합 ---------------------------------------------------------------
+    # ---- concept sets ------------------------------------------------------------
     @app.get('/WebAPI/conceptset')
     @app.get('/WebAPI/conceptset/')
     def list_concept_sets():
@@ -398,7 +402,7 @@ def create_app(sources, store, title='duckcdm'):
     def concept_set_tag(cid: int, tag: int = 0):
         return {}
 
-    # ---- 코호트 정의 -------------------------------------------------------------
+    # ---- cohort definitions ------------------------------------------------------
     def expression_text(b):
         e = b.get('expression')
         return e if isinstance(e, str) else json.dumps(e)
@@ -473,7 +477,7 @@ def create_app(sources, store, title='duckcdm'):
         return {'targetSQL': translate(sql, b.get('targetDialect') or 'duckdb',
                                        temp_emulation_schema=b.get('oracleTempSchema'))}
 
-    # ---- 코호트 생성 -------------------------------------------------------------
+    # ---- cohort generation -------------------------------------------------------
     def run_generation(cid, s, jid):
         t0 = time.time()
         c = store.get_cohort(cid)
@@ -559,7 +563,7 @@ def create_app(sources, store, title='duckcdm'):
     @app.get('/WebAPI/conceptset/{cid}/version/')
     @app.get('/WebAPI/conceptset/{cid}/version')
     def versions(cid: int):
-        return []                       # 버전 이력은 아직 없다
+        return []                       # no version history yet
 
     @app.get('/WebAPI/cohortsample/has-samples/{cid}')
     def has_samples(cid: int):
@@ -574,7 +578,7 @@ def create_app(sources, store, title='duckcdm'):
         return {'sourceKey': key, 'status': 'not_built', 'totalPatientCount': None, 'lastBuiltAt': None,
                 'sizeBytes': None, 'errorMessage': None}
 
-    # ---- 작업 ---------------------------------------------------------------------
+    # ---- jobs --------------------------------------------------------------------
     @app.get('/WebAPI/job/execution')
     def job_executions():
         jobs = store.jobs()
@@ -589,7 +593,7 @@ def create_app(sources, store, title='duckcdm'):
             raise HTTPException(404, 'job not found')
         return j
 
-    # ---- 화면 ---------------------------------------------------------------------
+    # ---- UI ----------------------------------------------------------------------
     @app.get('/config-local.json')
     def config_local():
         return {'api': {'url': './WebAPI'}, 'userAuthenticationEnabled': False, 'enableSkipLogin': True,

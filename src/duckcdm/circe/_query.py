@@ -1,4 +1,4 @@
-"""CohortExpressionQueryBuilder · ConceptSetExpressionQueryBuilder 포팅."""
+"""CohortExpressionQueryBuilder · ConceptSetExpressionQueryBuilder port."""
 import json
 
 from ._builders import (BUILDERS, build_date_range_clause, build_numeric_range_clause, concept_ids,
@@ -14,14 +14,14 @@ DEFAULT_DRUG_EXPOSURE_END_DATE_EXPRESSION = ('COALESCE(DRUG_EXPOSURE_END_DATE, D
 
 
 def eq_ic(a, b):
-    """String.equalsIgnoreCase (a 는 null 이면 NPE)."""
+    """String.equalsIgnoreCase (NPE if a is null)."""
     nn(a, 'string')
     if b is None or len(a) != len(b):
         return False
     return all(x == y or x.upper() == y.upper() or x.lower() == y.lower() for x, y in zip(a, b))
 
 
-# ---- 개념집합 ----------------------------------------------------------------
+# ---- concept sets ------------------------------------------------------------
 
 def _concept_set_sub_query(concepts, descendants):
     queries = []
@@ -68,7 +68,7 @@ def build_concept_set_query(expression):
     return q
 
 
-# ---- 코호트 ------------------------------------------------------------------
+# ---- cohorts -----------------------------------------------------------------
 
 class BuilderOptions:
     def __init__(self):
@@ -121,7 +121,7 @@ class CohortExpressionQueryBuilder:
         self.additional_criteria_left = jreplace(template('additionalCriteriaExclude.sql'), '@windowedCriteria',
                                                  template('windowedCriteria.sql'))
 
-    # -- 기준 디스패치
+    # -- criteria dispatch
     def criteria_sql(self, c, options=None):
         nn(c, 'criteria')
         if c.TYPE == 'CustomEra':
@@ -146,7 +146,7 @@ class CohortExpressionQueryBuilder:
                 'FROM (\n%s\n) PE\nJOIN (\n%s) AC on AC.person_id = pe.person_id and AC.event_id = pe.event_id\n'
                 % (query, group_query))
 
-    # -- 조각
+    # -- fragments
     def get_codeset_query(self, concept_sets):
         if concept_sets is None or len(concept_sets) <= 0:
             return jreplace(template('codesetQuery.sql'), '@codesetInserts', '')
@@ -333,7 +333,7 @@ class CohortExpressionQueryBuilder:
                                              _occurrence_operator(occ.type), occ.count)
         return jreplace(query, '@occurrenceCriteria', crit)
 
-    # -- 종료 전략
+    # -- end strategy
     def strategy_sql(self, strat, event_table):
         if isinstance(strat, DateOffsetStrategy):
             s = jreplace(template('dateOffsetStrategy.sql'), '@eventTable', event_table)
@@ -352,7 +352,7 @@ class CohortExpressionQueryBuilder:
         s = jreplace(s, '@offset', str(strat.offset))
         return jreplace(s, '@drugExposureEndDateExpression', end_expr)
 
-    # -- 전체
+    # -- whole query
     def build_expression_query(self, expression, options=None):
         if not isinstance(expression, CohortExpression):
             expression = CohortExpression.from_json(expression)

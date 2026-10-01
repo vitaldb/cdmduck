@@ -1,4 +1,4 @@
-"""Harness.java 를 여러 조각으로 병렬 실행. 한 케이스가 TIMEOUT 초 넘게 멈추면 프로세스를 죽이고 'T' 로 기록한 뒤 다음부터 재시작."""
+"""Run Harness.java in parallel over several chunks. If a case hangs longer than TIMEOUT seconds, kill the process, record 'T' and restart from the next case."""
 import os, subprocess, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -7,7 +7,7 @@ TIMEOUT = float(sys.argv[4]) if len(sys.argv) > 4 else 30
 HERE = os.environ.get('HARNESS_DIR') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'java')
 CSV = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'src', 'duckcdm', 'sqlrender',
                                    'csv', 'replacementPatterns.csv'))
-# Circe 처럼 다른 하네스: HARNESS_DIR, HARNESS_MAIN, HARNESS_CP(추가 classpath), 인자 없음
+# other harnesses such as Circe: HARNESS_DIR, HARNESS_MAIN, HARNESS_CP (extra classpath), no arguments
 MAIN = os.environ.get('HARNESS_MAIN', 'Harness.java')
 CP = '.' + (':' + os.environ['HARNESS_CP'] if os.environ.get('HARNESS_CP') else '')
 ARGS = [] if os.environ.get('HARNESS_MAIN') else [CSV]
@@ -24,7 +24,7 @@ def run_chunk(chunk):
             try:
                 p.stdin.writelines(rest)
                 p.stdin.close()
-            except BrokenPipeError:     # 멈춘 프로세스를 죽였을 때
+            except BrokenPipeError:     # when we killed a hung process
                 pass
         threading.Thread(target=feed, daemon=True).start()
         got = []
@@ -42,7 +42,7 @@ def run_chunk(chunk):
         p.wait()
         res.extend(got)
         i += len(got)
-        if i < len(chunk):          # 멈춘 케이스
+        if i < len(chunk):          # the hung case
             res.append('T')
             i += 1
     return res

@@ -1,4 +1,4 @@
-"""CDM 데이터 소스: DuckDB 파일 하나 = WebAPI 의 Source 하나(CDM·Vocabulary·Results 다이몬)."""
+"""CDM data sources: one DuckDB file = one WebAPI Source (CDM, Vocabulary and Results daimons)."""
 import os
 import threading
 
@@ -20,7 +20,7 @@ def sql_resource(*parts):
 
 
 def q(s):
-    """SQL 문자열 리터럴."""
+    """SQL string literal."""
     if s is None:
         return 'NULL'
     return "'" + str(s).replace("'", "''") + "'"
@@ -31,13 +31,13 @@ def q_in(values):
 
 
 def like_text(s):
-    """LIKE '%@x%' 처럼 이미 따옴표 안에 들어가는 자리의 글자."""
+    """Text for a spot already inside quotes, as in LIKE '%@x%'."""
     return str(s).replace("'", "''")
 
 
 class Source:
-    """하나의 DuckDB 파일. 쓰기 연결은 하나를 잠금으로 공유하고(DuckDB 는 프로세스 안 다중 연결은 cursor 로),
-    읽기는 cursor() 로 나눠 쓴다."""
+    """One DuckDB file. A single write connection is shared under a lock (within a process DuckDB does multiple
+    connections via cursors); reads each get their own cursor()."""
 
     def __init__(self, source_id, key, name, path, cdm_schema='main', vocab_schema=None, results_schema='results',
                  read_only=False, memory_limit=None, threads=None):
@@ -58,12 +58,12 @@ class Source:
         if not read_only:
             self.init_results()
 
-    # -- 연결
+    # -- connection
     def cursor(self):
         return self.con.cursor()
 
     def execute_script(self, sql, cur=None):
-        """OHDSI SQL(SQL Server 방언, @파라미터 이미 채움) → duckdb 로 번역해 문장별로 실행."""
+        """OHDSI SQL (SQL Server dialect, @parameters already filled) -> translate to duckdb and run statement by statement."""
         c = cur or self.cursor()
         for stmt in split_sql(translate(sql, self.dialect)):
             if stmt.strip():
@@ -71,7 +71,7 @@ class Source:
         return c
 
     def query(self, sql, **params):
-        """렌더 → 번역 → 실행, (columns, rows)."""
+        """Render -> translate -> execute; returns (columns, rows)."""
         rendered = render(sql, **params)
         duck = translate(rendered, self.dialect)
         cur = self.cursor()
@@ -86,7 +86,7 @@ class Source:
         cols, rows = self.query(sql, **params)
         return [dict(zip(cols, r)) for r in rows]
 
-    # -- 결과 스키마
+    # -- results schema
     def init_results(self):
         with self.lock:
             cur = self.cursor()
@@ -94,12 +94,12 @@ class Source:
             for name in ('cohort', 'cohort_inclusion', 'cohort_inclusion_result', 'cohort_inclusion_stats',
                          'cohort_summary_stats', 'cohort_censor_stats'):
                 ddl = sql_resource('results', name + '.sql')
-                # "IF OBJECT_ID(...) IS NULL CREATE TABLE" 는 SQL Server 전용 — 번역기가 못 다루므로 직접 처리
+                # "IF OBJECT_ID(...) IS NULL CREATE TABLE" is SQL Server only — the translator cannot handle it, so do it directly
                 body = ddl[ddl.index('CREATE TABLE'):]
                 body = body.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', 1)
                 self.execute_script(render(body, results_schema=self.results_schema), cur)
 
-    # -- WebAPI 모양
+    # -- WebAPI shapes
     def info(self):
         return {
             'sourceId': self.source_id, 'sourceKey': self.key, 'sourceName': self.name, 'sourceDialect': self.dialect,

@@ -1,4 +1,4 @@
-"""org.ohdsi.sql.SqlTranslate 포팅: SQL Server 방언 → 대상 방언(패턴 치환)."""
+"""org.ohdsi.sql.SqlTranslate port: SQL Server dialect -> target dialect (pattern substitution)."""
 import os
 import random as _random
 import re
@@ -15,7 +15,7 @@ from ._strings import (LazyTokens, Token, _scan, replace_all, replace_with_conca
 SESSION_ID_LENGTH = 8
 MAX_TABLE_NAME_LENGTH = 63
 BIG_QUERY, IMPALA, SPARK = 'bigquery', 'impala', 'spark'
-_FLAGS = re.I | re.S | re.M | re.A          # Java CASE_INSENSITIVE|DOTALL|MULTILINE (ASCII 대소문자·\w·\s·\b)
+_FLAGS = re.I | re.S | re.M | re.A          # Java CASE_INSENSITIVE|DOTALL|MULTILINE (ASCII case, \w, \s, \b)
 _CSV = os.path.join(os.path.dirname(__file__), 'csv', 'replacementPatterns.csv')
 
 _patterns = None
@@ -37,7 +37,7 @@ class MatchedPattern:
 
     def __init__(self):
         self.start = self.end = self.start_token = 0
-        self.variable_to_value = {}          # 삽입 순서 보존 → hash_order 로 Java HashMap 순서 재현
+        self.variable_to_value = {}          # keeps insertion order -> hash_order reproduces Java HashMap order
         self.tokens = None
 
 
@@ -104,10 +104,10 @@ def _matches_end(regex, s):
 
 
 def search(sql, pp, start_token, offset=0, state=0):
-    """SqlTranslate.search. offset/state 를 주면 그 자리(토큰 시작, 따옴표 상태)부터의 상대 토큰 번호로 찾는다 —
-    그 앞의 토큰은 Java 도 들여다보지 않으므로 결과가 같다. 토큰은 일치하는 곳까지만 만든다."""
+    """SqlTranslate.search. Given offset/state, searches with token numbers relative to that point (token start, quote state) —
+    Java never looks at earlier tokens either, so the result is the same. Tokens are built only up to the match."""
     if sql and sql[-1] in '-/':
-        tokenize(sql.lower())           # Java 는 전체를 먼저 토큰화하다 끝 글자에서 예외를 던진다
+        tokenize(sql.lower())           # Java tokenizes everything first and throws at the last character
     tk = LazyTokens(sql.lower(), offset, state)
     texts, starts, ends, states = tk.texts, tk.starts, tk.ends, tk.states
     ensure = tk.ensure
@@ -125,7 +125,7 @@ def search(sql, pp, start_token, offset=0, state=0):
         blk = pp[match_count]
         if blk.is_variable:
             if blk.regex is not None and (match_count == n_pp - 1 or pp[match_count + 1].is_variable):
-                # 패턴 끝의 정규식 변수, 또는 뒤에 다른 변수가 오는 정규식 변수
+                # regex variable at the end of the pattern, or a regex variable followed by another variable
                 m = _rx(blk.regex).search(substring(sql, t_start))
                 if m is not None and m.start() == 0:
                     if match_count == 0:
@@ -172,7 +172,7 @@ def search(sql, pp, start_token, offset=0, state=0):
                     if t_text == "'":
                         in_pq = not in_pq
             elif match_count != 0 and not nest and not in_pq and t_text in (';', ')'):
-                # 여러 문장이나 괄호 밖으로 걸쳐 일치할 수 없다
+                # a match cannot span multiple statements or go outside parentheses
                 match_count = 0
                 cursor = mp.start_token
             else:
@@ -186,7 +186,7 @@ def search(sql, pp, start_token, offset=0, state=0):
                 elif not in_pq and nest and t_text == ')' and nest[-1] == '(':
                     nest.pop()
         else:
-            # 패턴의 첫 부분은 따옴표 안에서 시작할 수 없다
+            # the first part of the pattern cannot start inside quotes
             if t_text == blk.text and (match_count != 0 or not states[cursor]):
                 if match_count == 0:
                     mp.start = t_start
@@ -211,14 +211,14 @@ def search(sql, pp, start_token, offset=0, state=0):
 
 
 def _next_offset(new_sql, tk, mp, offset, state, target):
-    """치환 뒤 새 문자열에서 상대 토큰 target(= startToken + delta) 의 (시작 위치, 그 앞 따옴표 상태).
-    mp.start 앞에서 시작하는 토큰들은 그대로이므로 마지막 그런 토큰부터 다시 훑어 번호를 센다. 없으면 None."""
-    c = bisect_left(tk.starts, mp.start)      # mp.start 앞에서 시작하는(이미 만든) 토큰 수
+    """(start position, preceding quote state) of relative token target (= startToken + delta) in the new string after replacement.
+    Tokens starting before mp.start are unchanged, so rescan from the last such token to count. None if it does not exist."""
+    c = bisect_left(tk.starts, mp.start)      # number of (already built) tokens starting before mp.start
     if c == 0:
         p0, st, base = offset, state, 0
     else:
         p0, st, base = tk.starts[c - 1], tk.states[c - 1], c - 1
-    if target < base:                           # 이미 만든 앞쪽 토큰 (바뀌지 않은 부분)
+    if target < base:                           # an already built earlier token (unchanged part)
         return tk.starts[target], tk.states[target]
     texts, starts, ends, states = [], [], [], []
     low = new_sql.lower()
@@ -230,7 +230,7 @@ def _next_offset(new_sql, tk, mp, offset, state, target):
 
 
 def _search_and_replace(sql, pp, replace_pattern):
-    # 패턴의 글자 토큰이 문자열에 아예 없으면 일치할 수 없다
+    # no match is possible if a literal token of the pattern is absent from the string
     low = sql.lower()
     for blk in pp:
         if not blk.is_variable and blk.text not in low:
@@ -244,12 +244,12 @@ def _search_and_replace(sql, pp, replace_pattern):
             replacement = replace_all(replacement, k, vv[k])
         new_sql = substring(sql, 0, mp.start) + replacement + substring(sql, mp.end)
         delta = 1 if len(tokenize(replacement)) else 0
-        # 치환문이 변수로 시작하고 그 값이 검색 패턴 첫 토큰으로 시작하면 첫 토큰을 건너뛰지 않는다
+        # if the replacement starts with a variable whose value starts with the search pattern's first token, do not skip the first token
         if delta > 0 and replace_pattern.startswith('@@') and trim(replacement.lower()).startswith(pp[0].text):
             delta = 0
         nxt = _next_offset(new_sql, mp.tokens, mp, offset, state, mp.start_token + delta)
         sql = new_sql
-        if nxt is None:                       # 그 번호의 토큰이 없다 → Java 의 search 도 바로 -1
+        if nxt is None:                       # no token with that number -> Java's search also returns -1 right away
             break
         offset, state = nxt
         mp = search(sql, pp, 0, offset, state)
@@ -261,7 +261,7 @@ def _translate(sql, patterns, session_id, temp_prefix):
     for search_p, repl_p in patterns:
         repl_p = repl_p.replace('%session_id%', session_id).replace('%temp_prefix%', temp_prefix)
         new = _search_and_replace(sql, _parse_search_pattern(search_p), repl_p)
-        if first or new is not sql:           # 빈 줄 제거는 멱등이라 바뀐 것이 없으면 생략해도 같다
+        if first or new is not sql:           # blank-line removal is idempotent, so skipping it when nothing changed gives the same result
             sql = remove_blank_lines(new)
             first = False
     return remove_blank_lines(sql)
@@ -278,7 +278,7 @@ def _line2columns(line):
 
 
 def load_patterns(path=None):
-    """{대상방언: [(검색, 치환), …]} — 입력 순서 유지. Java readLine 처럼 \\r\\n·\\r·\\n 만 줄 구분."""
+    """{target dialect: [(search, replace), …]} — input order kept. Like Java readLine, only \\r\\n, \\r and \\n separate lines."""
     with open(path or _CSV, encoding='utf-8', newline='') as f:
         text = f.read()
     lines = re.split(r'\r\n|\r|\n', text)

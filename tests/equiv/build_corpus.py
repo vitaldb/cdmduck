@@ -1,7 +1,7 @@
-"""Java·Python 비교용 케이스 모음: SqlRender R 테스트의 문자열, Circe·WebAPI 의 SQL 파일, 합성 render 케이스."""
+"""Cases for Java/Python comparison: strings from SqlRender R tests, SQL files from Circe and WebAPI, synthetic render cases."""
 import base64, glob, os, random, re, sys
 
-SRC = sys.argv[1]          # 클론들이 있는 디렉터리 (sqlrender, circe-be, webapi3)
+SRC = sys.argv[1]          # directory holding the clones (sqlrender, circe-be, webapi3)
 OUT = sys.argv[2]
 DIALECTS = ['sql server', 'oracle', 'postgresql', 'redshift', 'pdw', 'synapse', 'impala', 'netezza', 'bigquery',
             'sqlite', 'sqlite extended', 'hive', 'spark', 'snowflake', 'iris', 'duckdb']
@@ -14,7 +14,7 @@ def r_unescape(s):
     return re.sub(r'\\(.)', lambda m: {'n': '\n', 't': '\t', 'r': '\r'}.get(m.group(1), m.group(1)), s)
 
 
-# 1) R 테스트의 문자열 리터럴
+# 1) string literals from the R tests
 lits = []
 for f in sorted(glob.glob(f'{SRC}/sqlrender/tests/testthat/*.R')):
     txt = open(f, encoding='utf-8').read()
@@ -31,7 +31,7 @@ for s in lits:
     cases.append(('S', '', s, ''))
     cases.append(('1', 'duckdb', s, ''))
 
-# 2) 실제 SQL 파일
+# 2) real SQL files
 files = sorted(glob.glob(f'{SRC}/circe-be/**/*.sql', recursive=True) + glob.glob(f'{SRC}/webapi3/**/*.sql', recursive=True))
 bodies = []
 for f in files:
@@ -42,7 +42,7 @@ for f in files:
     bodies.append(s)
     cases.append(('S', '', s, ''))
     cases.append(('R', '', s, ''))
-    # 파라미터를 무작위로 채워 렌더
+    # render with randomly filled parameters
     names = list(dict.fromkeys(re.findall(r'@([A-Za-z_][A-Za-z0-9_]*)', s)))
     for k in range(2):
         vals = [rng.choice(['TRUE', 'FALSE', '1', '0', 'cdm', 'results', 'main.cdm', "'x'", '12,34', 'a$b\\c'])
@@ -51,7 +51,7 @@ for f in files:
     for d in DIALECTS:
         cases.append(('T', d, s, ''))
 
-# 3) 합성 조건식 렌더
+# 3) synthetic conditional-expression renders
 atoms = ['@a', '@b', 'TRUE', 'FALSE', '1', '0', "'x'", '@c']
 ops = ['==', '!=', '<>', ' & ', ' | ']
 for i in range(3000):

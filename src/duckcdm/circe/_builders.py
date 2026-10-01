@@ -1,4 +1,4 @@
-"""org.ohdsi.circe.cohortdefinition.builders 포팅."""
+"""org.ohdsi.circe.cohortdefinition.builders port."""
 import os
 
 from ._jutil import (CirceError, commons_split, i32, java_parse_int, jformat_f, jjoin, jreplace, jstr, nn)
@@ -60,7 +60,7 @@ def get_operator(op):
 def date_string_to_sql(date):
     parts = commons_split(nn(date, 'date'), '-')
     if len(parts) < 3:
-        # Integer.valueOf 를 순서대로 부르다 범위를 벗어난다
+        # calls Integer.valueOf in order and goes out of range
         for p in parts:
             java_parse_int(p)
         raise CirceError('ArrayIndexOutOfBoundsException')
@@ -180,7 +180,7 @@ class CriteriaSqlBuilder:
             wheres.append('C.end_date >= C.start_date')
         return wheres
 
-    # 공통 조각
+    # common fragments
     def _ordinal(self, query, c, wheres, expr):
         if c.first is not None and c.first:
             wheres.append('C.ordinal = 1')
@@ -406,7 +406,7 @@ class DeathSqlBuilder(CriteriaSqlBuilder):
         return s
 
     def _dates(self, c, start_expr, end_expr, plain):
-        # Death 는 시작/끝 선택과 무관하게 (death_date, death_date+1) 을 넘긴다
+        # Death passes (death_date, death_date+1) regardless of the start/end choice
         return get_date_adjustment_expression(c.date_adjustment, start_expr, end_expr)
 
     def resolve_join_clauses(self, c):
@@ -606,7 +606,7 @@ class DrugExposureSqlBuilder(CriteriaSqlBuilder):
         if c.occurrence_start_date is not None:
             w.append(build_date_range_clause('C.start_date', c.occurrence_start_date))
         if c.occurrence_end_date is not None:
-            w.append(build_date_range_clause('C.start_date', c.occurrence_end_date))   # Java 원본 그대로(start_date)
+            w.append(build_date_range_clause('C.start_date', c.occurrence_end_date))   # as in the Java original (start_date)
         if _has(c.drug_type):
             w.append(_type_in('C.drug_type_concept_id', c.drug_type, c.drug_type_exclude))
         if c.drug_type_cs is not None:
@@ -1008,7 +1008,7 @@ class SpecimenSqlBuilder(CriteriaSqlBuilder):
         return [PERSON_JOIN] if _std_person_join(c) else []
 
     def resolve_where_clauses(self, c):
-        w = []          # Java 원본도 super 를 부르지 않는다
+        w = []          # the Java original does not call super either
         if c.occurrence_start_date is not None:
             w.append(build_date_range_clause('C.specimen_date', c.occurrence_start_date))
         if _has(c.specimen_type):

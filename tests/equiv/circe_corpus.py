@@ -1,6 +1,6 @@
-"""Circe 동등성 검증용 케이스: PhenotypeLibrary 코호트, 그 개념집합, circe 테스트 JSON, 무작위 코호트.
+"""Cases for Circe equivalence testing: PhenotypeLibrary cohorts, their concept sets, circe test JSON, random cohorts.
 
-python3 circe_corpus.py <phenotype cohorts dir> <circe-be dir> out.tsv [무작위 개수]
+python3 circe_corpus.py <phenotype cohorts dir> <circe-be dir> out.tsv [random count]
 """
 import base64, glob, json, os, random, sys
 
@@ -30,14 +30,14 @@ for f in sorted(glob.glob(os.path.join(PHL, '*.json'))):
     except ValueError:
         pass
 
-# 2) circe 자체 테스트 JSON
+# 2) circe's own test JSON
 for f in sorted(glob.glob(os.path.join(CIRCE, 'src', 'test', 'resources', '**', '*.json'), recursive=True)):
     try:
         add_cohort(open(f, encoding='utf-8').read(), OPTIONS[:2])
     except UnicodeDecodeError:
         pass
 
-# 3) 무작위 코호트
+# 3) random cohorts
 OPS_N = ['lt', 'lte', 'eq', '!eq', 'gt', 'gte', 'bt', '!bt']
 OPS_T = ['startsWith', 'contains', 'endsWith', '!startsWith', '!contains', '!endsWith']
 COLS = ['DAYS_SUPPLY', 'DOMAIN_CONCEPT', 'DOMAIN_SOURCE_CONCEPT', 'DURATION', 'END_DATE', 'ERA_OCCURRENCES', 'GAP_DAYS',
@@ -49,7 +49,7 @@ def maybe(p=0.5):
     return rng.random() < p
 
 
-CLEAN = os.environ.get('CIRCE_CLEAN') == '1'     # 1 이면 일부러 틀린 값 없이 → 성공하는 SQL 경로를 넓게
+CLEAN = os.environ.get('CIRCE_CLEAN') == '1'     # if 1, no deliberately wrong values -> broader coverage of successful SQL paths
 
 
 def edge(p=0.03):
@@ -114,7 +114,7 @@ def period():
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
-from duckcdm.circe import _model as M      # noqa: E402  (필드 이름 목록만 쓴다 — Java 와 일치를 앞서 확인)
+from duckcdm.circe import _model as M      # noqa: E402  (uses only the field-name lists — checked earlier to match Java)
 
 CONV_GEN = {M._nr: nrange, M._concepts: concepts, M._cs: cs_sel, M._dr: drange, M._tf: text,
             M.Period.parse: period, M.DateAdjustment.parse: da,
@@ -127,7 +127,7 @@ FIELDS = {t: [(j, conv) for j, _, conv, _ in c._all_fields() if j not in ('Corre
 
 def gen_by_conv(conv):
     if edge(0.01):
-        return rng.choice(WRONG)()          # 일부러 틀린 형 — Jackson 강제변환·오류 경로 확인
+        return rng.choice(WRONG)()          # deliberately wrong type — exercises Jackson coercion and error paths
     return CONV_GEN[conv]()
 
 

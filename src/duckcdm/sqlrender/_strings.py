@@ -1,10 +1,10 @@
-"""org.ohdsi.sql.StringUtils · SqlSplit 포팅."""
+"""org.ohdsi.sql.StringUtils · SqlSplit port."""
 import re
 from collections import OrderedDict
 
 from ._java import JavaError, char_at, is_letter_or_digit, is_whitespace, substring
 
-# Java 의 '.' 는 모든 줄바꿈 문자(\n \r \u0085 \u2028 \u2029)를 제외한다
+# Java's '.' excludes all line terminators (\n \r \u0085 \u2028 \u2029)
 REGEX_ESCAPED_APOSTROPHES = r"""(['"])((?!\1)[^\n\r\u0085\u2028\u2029]|\1{2})*\1"""
 HINT_KEY_WORD = 'hint'
 
@@ -19,7 +19,7 @@ class Token:
             self.in_quotes = False
         else:
             self.start, self.end, self.text = other.start, other.end, other.text
-            self.in_quotes = False          # Java 복사 생성자는 inQuotes 를 복사하지 않는다
+            self.in_quotes = False          # the Java copy constructor does not copy inQuotes
 
     def is_identifier(self):
         return all(is_letter_or_digit(ch) or ch == '_' for ch in self.text)
@@ -35,7 +35,7 @@ def replace(string, start, end, replacement):
 
 
 def replace_all(result, search, repl):
-    """StringUtils.replaceAll: 정규식이 아닌 문자 그대로, 바꾼 뒤 위치부터 계속."""
+    """StringUtils.replaceAll: literal (not regex), continuing from the position after each replacement."""
     pos = 0
     while True:
         pos = result.find(search, pos)
@@ -46,7 +46,7 @@ def replace_all(result, search, repl):
 
 
 def _char_class(pred, extra=''):
-    """BMP 전체에서 pred 가 참인 글자들을 정규식 문자 클래스로 (Java 는 UTF-16 단위로 판정)."""
+    """Regex character class of all BMP characters for which pred is true (Java decides per UTF-16 unit)."""
     ranges = []
     lo = None
     for c in range(0x10000):
@@ -74,7 +74,7 @@ def _new_token(start, end, text, in_quotes):
 
 
 class Tokens:
-    """토큰 목록을 평행 리스트로 (search 가 빠르게 훑도록). state 는 토큰 직전의 따옴표 상태(1=작은, 2=큰)."""
+    """Token list as parallel lists (so search can scan fast). state is the quote state just before the token (1=single, 2=double)."""
     __slots__ = ('sql', 'texts', 'starts', 'ends', 'states')
 
     def __init__(self, sql, texts, starts, ends, states):
@@ -91,8 +91,8 @@ class Tokens:
 
 
 def _scan(sql, pos, state, texts, starts, ends, states, limit=None):
-    """pos 부터 state(따옴표 상태: 1=작은, 2=큰)로 훑어 평행 리스트에 덧붙인다.
-    limit 개 토큰을 만들면 (pos, state) 를 돌려주고(이어서 훑을 수 있음), 끝까지 가면 None."""
+    """Scan from pos in state (quote state: 1=single, 2=double), appending to the parallel lists.
+    After limit tokens returns (pos, state) so scanning can resume; returns None on reaching the end."""
     in_single, in_double = bool(state & 1), bool(state & 2)
     n = len(sql)
     match = _TOKEN_RE.match
@@ -109,10 +109,10 @@ def _scan(sql, pos, state, texts, starts, ends, states, limit=None):
             pos = m.end()
             continue
         ch = m.group(2)
-        if ch is None:                      # 공백
+        if ch is None:                      # whitespace
             pos = m.end()
             continue
-        # Java 는 마지막 글자가 '-' 나 '/' 이면 charAt(cursor+1) 에서 예외를 던진다
+        # Java throws at charAt(cursor+1) when the last character is '-' or '/'
         if ch == '-' and char_at(sql, pos + 1) == '-' and not in_single and not in_double \
                 and (n - pos < 6 or sql[pos + 2:pos + 6] != HINT_KEY_WORD):
             e = sql.find('\n', pos + 1)
@@ -137,8 +137,8 @@ def _scan(sql, pos, state, texts, starts, ends, states, limit=None):
 
 
 class LazyTokens:
-    """offset 부터 필요한 만큼만 토큰화한다. search 는 처음 일치하는 곳에서 돌아오므로 그 뒤는 만들 필요가 없다.
-    토큰 번호는 offset 에서 시작하는 상대 번호. offset 은 토큰 시작 자리(정상 상태)여야 한다."""
+    """Tokenize lazily from offset, only as far as needed. search returns at the first match, so nothing beyond it is needed.
+    Token numbers are relative to offset. offset must be at a token start (normal state)."""
     __slots__ = ('sql', 'texts', 'starts', 'ends', 'states', 'pos', 'state', 'n')
     CHUNK = 512
 
@@ -148,7 +148,7 @@ class LazyTokens:
         self.pos, self.state, self.n = offset, state, 0
 
     def ensure(self, i):
-        """i 번 토큰이 있으면 True (필요하면 더 만든다)."""
+        """True if token i exists (tokenizing further if needed)."""
         while i >= self.n and self.pos is not None:
             r = _scan(self.sql, self.pos, self.state, self.texts, self.starts, self.ends, self.states, self.CHUNK)
             if r is None:
@@ -169,7 +169,7 @@ _recent = OrderedDict()
 
 
 def tokenize(sql):
-    """Tokens 를 돌려준다(읽기 전용으로 쓸 것). 같은 문자열을 되풀이해 토큰화하는 호출을 위해 캐시한다."""
+    """Return Tokens (treat as read-only). Cached for callers that tokenize the same string repeatedly."""
     t = _recent.get(sql)
     if t is not None:
         _recent.move_to_end(sql)
@@ -182,12 +182,12 @@ def tokenize(sql):
 
 
 def tokenize_sql(sql):
-    """영숫자·밑줄·@ 연속은 한 토큰, 그 밖의 특수문자는 한 글자씩. 공백과 주석은 토큰이 아니다."""
+    """Runs of alphanumerics, underscore and @ form one token; other special characters are one token each. Whitespace and comments are not tokens."""
     return tokenize(sql).to_list()
 
 
 def _tokenize_reference(sql):
-    """Java 코드를 글자 단위로 그대로 옮긴 원래 판 — 빠른 판과 결과 대조용."""
+    """Original version transcribed literally from the Java code — for cross-checking results against the fast version."""
     tokens = []
     start = 0
     cursor = 0
@@ -226,7 +226,7 @@ def _tokenize_reference(sql):
 
 
 def safe_split(string, delimiter):
-    """따옴표 안과 역슬래시 이스케이프를 존중하는 split."""
+    """split that respects quotes and backslash escapes."""
     if len(string) == 0:
         return ['']
     result = []
@@ -256,7 +256,7 @@ def split_and_keep(val, regex):
 
 
 def replace_with_concat(val):
-    """'a''b' 같은 이스케이프된 작은따옴표 문자열을 CONCAT('a','\\047','b') 로 바꾼다(Impala·BigQuery·Spark)."""
+    """'a''b'-style strings with escaped single quotes become CONCAT('a','\\047','b') (Impala, BigQuery, Spark)."""
     out = []
     for tok in split_and_keep(val, REGEX_ESCAPED_APOSTROPHES):
         if re.fullmatch(REGEX_ESCAPED_APOSTROPHES, tok) and "''" in tok and tok != "''":
@@ -275,7 +275,7 @@ def replace_with_concat(val):
 
 
 def split_sql(sql):
-    """SqlSplit.splitSql: 여러 문장을 문장 목록으로. BEGIN/CASE … END 중첩과 따옴표·대괄호를 존중."""
+    """SqlSplit.splitSql: split multiple statements into a list. Respects nested BEGIN/CASE … END, quotes and brackets."""
     parts = []
     tokens = tokenize_sql(sql.lower())
     nest = []

@@ -1,10 +1,10 @@
-"""Java·commons-lang3 동작 흉내: 출력이 circe-be(Java)와 글자 단위로 같아야 한다."""
+"""Emulation of Java/commons-lang3 behaviour: output must match circe-be (Java) character for character."""
 import re
 from decimal import ROUND_HALF_UP, Decimal
 
 
 class CirceError(RuntimeError):
-    """Java 쪽이 예외를 던지는 자리 (NPE, IllegalArgument, Jackson 오류 등)."""
+    """Where the Java side throws (NPE, IllegalArgument, Jackson errors, etc.)."""
 
 
 def npe(what='NullPointerException'):
@@ -12,7 +12,7 @@ def npe(what='NullPointerException'):
 
 
 def nn(x, what='value'):
-    """Java 에서 null 역참조가 되는 자리."""
+    """Where Java would dereference null."""
     if x is None:
         raise CirceError('NullPointerException: ' + what)
     return x
@@ -24,7 +24,7 @@ def i32(n):
 
 
 def jstr(x):
-    """String.valueOf / 문자열 연결 / %s·%d 의 결과."""
+    """Result of String.valueOf / string concatenation / %s, %d."""
     if x is None:
         return 'null'
     if x is True:
@@ -37,7 +37,7 @@ def jstr(x):
 
 
 def java_double_str(d):
-    """Double.toString (JDK 19+ 최단 자릿수 = 파이썬 repr 자릿수)."""
+    """Double.toString (JDK 19+ shortest digits = Python repr digits)."""
     if d != d:
         return 'NaN'
     if d in (float('inf'), float('-inf')):
@@ -46,7 +46,7 @@ def java_double_str(d):
         return '-0.0' if repr(d).startswith('-') else '0.0'
     sign, digs, exp = Decimal(repr(d)).as_tuple()
     digs = ''.join(map(str, digs)).rstrip('0') or '0'
-    point = len(''.join(map(str, Decimal(repr(d)).as_tuple()[1]))) + exp     # 소수점 위치(앞자리 수)
+    point = len(''.join(map(str, Decimal(repr(d)).as_tuple()[1]))) + exp     # decimal point position (number of integer digits)
     neg = '-' if sign else ''
     if 1e-3 <= abs(d) < 1e7:
         if point <= 0:
@@ -58,12 +58,12 @@ def java_double_str(d):
 
 
 def jjoin(items, sep):
-    """commons-lang3 StringUtils.join: null 원소는 빈 문자열."""
+    """commons-lang3 StringUtils.join: null elements become empty strings."""
     return sep.join('' if x is None else jstr(x) for x in items)
 
 
 def jformat_f(d, prec):
-    """String.format(Locale.US, "%.Nf", d) — Java 는 HALF_UP 반올림."""
+    """String.format(Locale.US, "%.Nf", d) — Java rounds HALF_UP."""
     if d != d:
         return 'NaN'
     if d in (float('inf'), float('-inf')):
@@ -73,7 +73,7 @@ def jformat_f(d, prec):
 
 
 def java_replacement(rep):
-    """Matcher.replaceAll 의 치환 문자열 해석(\\x, $n). 그룹이 없는 정규식이므로 $0 만 유효."""
+    """Interpret a Matcher.replaceAll replacement string (\\x, $n). The regex has no groups, so only $0 is valid."""
     out = []
     i = 0
     while i < len(rep):
@@ -102,7 +102,7 @@ def java_replacement(rep):
 
 
 def regex_replace_all(text, literal_pattern, rep):
-    """commons-lang3 StringUtils.replaceAll(text, regex, replacement) — 여기서는 패턴이 정규식 특수문자 없는 문자열."""
+    """commons-lang3 StringUtils.replaceAll(text, regex, replacement) — here the pattern is a string with no regex metacharacters."""
     if text is None or literal_pattern is None or rep is None:
         return text
     parts = java_replacement(rep)
@@ -113,7 +113,7 @@ def regex_replace_all(text, literal_pattern, rep):
 
 
 def jreplace(text, search, rep):
-    """commons-lang3 StringUtils.replace: 문자 그대로 전부. null 인자는 원문 그대로."""
+    """commons-lang3 StringUtils.replace: literal, all occurrences. A null argument returns the text unchanged."""
     if text is None or not search or rep is None:
         return text
     return text.replace(search, rep)
@@ -124,7 +124,7 @@ def is_empty(s):
 
 
 def commons_split(s, ch):
-    """StringUtils.split(str, char): 빈 토큰 없이."""
+    """StringUtils.split(str, char): no empty tokens."""
     return [p for p in s.split(ch) if p != ''] if s is not None else None
 
 

@@ -1,4 +1,4 @@
-"""org.ohdsi.sql.SqlRender 포팅: @파라미터 치환, {DEFAULT …}, {조건} ? {참} : {거짓}."""
+"""org.ohdsi.sql.SqlRender port: @parameter substitution, {DEFAULT …}, {condition} ? {true} : {false}."""
 import re
 
 from ._java import JavaError, hash_order, is_whitespace, split, substring, trim
@@ -40,7 +40,7 @@ def _find_spans(s, open_ch, close_ch):
 
 
 def _link_if_then_elses(s, spans):
-    # Java 와 같이 break 없이 전부 훑는다: 한 조건에 '?' 짝이 여럿이면 여럿 만들고, ':' 는 마지막 것이 이긴다
+    # Like Java, scan everything without break: several '?' matches for one condition yield several, and the last ':' wins
     out = []
     n = len(spans)
     if n > 1:
@@ -108,7 +108,7 @@ def _evaluate_primitive(s):
         right = trim(substring(s, found + 4))
         if len(right) > 2 and right[0] == '(' and right[-1] == ')':
             for part in split(right[1:-1], ','):
-                if left == _remove_parentheses(part):     # Java 도 part 를 trim 하지 않는다
+                if left == _remove_parentheses(part):     # Java does not trim part either
                     return True
             return False
     raise JavaError('Error parsing boolean condition: "' + s + '"')
@@ -147,7 +147,7 @@ def _replace(s, spans, to_start, to_end, with_start, with_end):
 def _evaluate_condition(s):
     s = trim(s)
     spans = _find_spans(s, '(', ')')
-    # 닫는 괄호 순서라 안쪽 괄호가 먼저 처리된다. Java 도 여기서는 valid 를 보지 않는다
+    # In closing-brace order, so inner braces are handled first. Java does not check valid here either
     for sp in spans:
         if not _preceded_by_in(sp.start, s):
             ev = _evaluate_boolean(substring(s, sp.start + 1, sp.end - 1))
@@ -176,14 +176,14 @@ def _extract_defaults(s):
 
 
 def _substitute_parameters(s, params):
-    """params: 삽입 순서를 지닌 dict (Java HashMap 에 넣은 순서)."""
+    """params: dict in insertion order (the order put into the Java HashMap)."""
     defaults = _extract_defaults(s)
     s = _DEFAULTS_RE.sub('', s)
     params = dict(params)
     for k in hash_order(list(defaults)):
         if k not in params:
             params[k] = defaults[k]
-    # HashMap 순회 순서에서 키 길이 내림차순 안정 정렬 → 값 속의 @다른키 도 Java 와 같은 순서로 치환된다
+    # Stable sort by key length descending over HashMap iteration order -> @otherKey inside values is substituted in the same order as Java
     keys = sorted(hash_order(list(params)), key=len, reverse=True)
     for k in keys:
         v = params[k]
@@ -208,7 +208,7 @@ def _parse_if_then_else(s):
 
 
 def render_sql(sql, parameters=None, values=None):
-    """SqlRender.renderSql(sql, String[] parameters, String[] values) 와 같은 결과."""
+    """SqlRender.renderSql(sql, String[] parameters, String[] values) gives the same result."""
     params = {}
     if parameters is not None:
         for p, v in zip(parameters, values):

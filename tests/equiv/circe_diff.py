@@ -1,4 +1,4 @@
-"""Circe java.out / py.out 비교."""
+"""Compare Circe java.out / py.out."""
 import base64, collections, json, sys
 
 d = lambda s: base64.b64decode(s).decode()

@@ -1,4 +1,4 @@
-"""OHDSI circe-be 의 파이썬 이식 — 코호트 정의(JSON) → OHDSI SQL. Java 판과 출력이 글자 단위로 같다.
+"""Python port of OHDSI circe-be — cohort definition (JSON) -> OHDSI SQL. Output matches the Java version character for character.
 
     from duckcdm.circe import build_cohort_query
     sql = build_cohort_query(cohort_json, cdm_schema="main", target_table="main.cohort", cohort_id=1)
@@ -14,7 +14,7 @@ _builder = None
 
 
 def build_cohort_query(expression, options=None, **kw):
-    """expression: JSON 문자열·dict·CohortExpression. options: BuildExpressionQueryOptions·dict·JSON 또는 키워드
+    """expression: JSON string, dict or CohortExpression. options: BuildExpressionQueryOptions, dict, JSON, or keywords
     (cohort_id, cdm_schema, target_table, result_schema, vocabulary_schema, generate_stats, cohort_id_field_name)."""
     global _builder
     if _builder is None:

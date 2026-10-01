@@ -1,4 +1,4 @@
-"""CirceHarness.java 와 같은 입출력을 파이썬 이식으로."""
+"""Same I/O as CirceHarness.java, using the Python port."""
 import base64, sys
 from concurrent.futures import ProcessPoolExecutor
 

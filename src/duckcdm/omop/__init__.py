@@ -1,6 +1,6 @@
-"""OMOP CDM 표 정의(OHDSI CommonDataModel 5.3·5.4 필드 목록)와 parquet 디렉터리 → DuckDB 뷰.
+"""OMOP CDM table definitions (OHDSI CommonDataModel 5.3/5.4 field lists) and parquet directory -> DuckDB views.
 
-parquet 에 있는 표준 밖의 열(원천 식별번호 등)은 뷰에 넣지 않는다. 표준 열이 parquet 에 없으면 NULL 로 채운다.
+Non-standard columns in the parquet (source identifiers, etc.) are left out of the views. Standard columns missing from the parquet are filled with NULL.
 """
 import csv
 import os
@@ -12,7 +12,7 @@ _TYPES = {'integer': 'INTEGER', 'bigint': 'BIGINT', 'float': 'DOUBLE', 'date': '
 
 
 def cdm_fields(versions=('5.4', '5.3')):
-    """{table: [(field, duckdb type), ...]} — 여러 버전의 합집합(5.4 순서 우선)."""
+    """{table: [(field, duckdb type), ...]} — union over versions (5.4 order first)."""
     out = {}
     with open(os.path.join(_DIR, 'cdm_fields.csv'), encoding='utf-8') as f:
         rows = list(csv.DictReader(f))
@@ -37,19 +37,19 @@ def _source(root, table):
 
 
 def create_parquet_views(con, root, schema='main', versions=('5.4', '5.3'), log=print):
-    """root/<table>/(**/)*.parquet 또는 root/<table>.parquet → schema.<table> 뷰. 돌려주는 값: {table: 제외한 열}."""
+    """root/<table>/(**/)*.parquet or root/<table>.parquet -> view schema.<table>. Returns {table: excluded columns}."""
     fields = cdm_fields(versions)
     con.execute(f'CREATE SCHEMA IF NOT EXISTS {schema}')
     excluded = {}
     for table, cols in fields.items():
-        if table in RESULTS_TABLES:            # 결과 스키마 쪽 표 — CDM 뷰로 만들지 않는다
+        if table in RESULTS_TABLES:            # results-schema table — not made into a CDM view
             continue
         src = _source(root, table)
         if src is None:
             sel = ', '.join(f'CAST(NULL AS {t}) AS "{c}"' for c, t in cols)
             con.execute(f'CREATE OR REPLACE VIEW {schema}.{table} AS SELECT {sel} FROM (SELECT 1) z WHERE 1 = 0')
             if log:
-                log(f'  {table:<24} (없음 → 빈 뷰)')
+                log(f'  {table:<24} (missing -> empty view)')
             continue
         reader = f"read_parquet('{src}', hive_partitioning=false, union_by_name=true)"
         have = {r[0].lower(): r[0] for r in con.execute(f'DESCRIBE SELECT * FROM {reader}').fetchall()}
@@ -59,7 +59,7 @@ def create_parquet_views(con, root, schema='main', versions=('5.4', '5.3'), log=
         excluded[table] = sorted(set(have) - {c for c, _ in cols})
         con.execute(f'CREATE OR REPLACE VIEW {schema}.{table} AS SELECT {", ".join(sel)} FROM {reader}')
         if log:
-            log(f'  {table:<24} 열 {len(cols)}' + (f'  제외: {", ".join(excluded[table])}' if excluded[table] else ''))
+            log(f'  {table:<24} columns {len(cols)}' + (f'  excluded: {", ".join(excluded[table])}' if excluded[table] else ''))
     return excluded
 
 

@@ -1,4 +1,4 @@
-"""앱 저장소(WebAPI 의 'webapi' 스키마에 해당): 개념집합·코호트 정의·생성 이력. DuckDB 파일 하나."""
+"""App store (equivalent to WebAPI's 'webapi' schema): concept sets, cohort definitions, generation history. A single DuckDB file."""
 import json
 import threading
 import time
@@ -55,13 +55,13 @@ class Store:
                   'seq_job': ('job_execution', 'execution_id')}
 
     def _next(self, seq):
-        # 시퀀스 대신 max+1: 프로세스가 비정상 종료돼도 번호가 되돌아가지 않는다
+        # max+1 instead of a sequence: ids never go backwards even if the process dies abnormally
         table, col = self._SEQ_TABLE[seq]
         with self.lock:
             return self.con.execute(f'SELECT coalesce(max({col}), 0) + 1 FROM {table}').fetchone()[0]
 
     def _common(self, r):
-        # 화면의 zod 스키마는 optional 이지 nullable 이 아니다 — 없는 값은 키를 빼야 한다
+        # the UI zod schema is optional, not nullable — missing values must omit the key
         d = {'createdBy': {'id': 1, 'login': r['created_by'], 'name': r['created_by']},
              'createdDate': r['created_date'], 'tags': [], 'hasWriteAccess': True, 'hasReadAccess': True,
              'writeAccess': True, 'readAccess': True}
@@ -70,7 +70,7 @@ class Store:
             d['modifiedDate'] = r['modified_date']
         return d
 
-    # ---- 개념집합
+    # ---- concept sets
     def list_concept_sets(self):
         return [dict(id=r['id'], name=r['name'], description=r['description'], **self._common(r))
                 for r in self._rows('SELECT * FROM concept_set ORDER BY id')]
@@ -114,7 +114,7 @@ class Store:
             self._exec('UPDATE concept_set SET modified_by = ?, modified_date = ? WHERE id = ?',
                        [self.user['login'], now_ms(), cid])
 
-    # ---- 코호트 정의
+    # ---- cohort definitions
     def list_cohorts(self):
         return [dict(id=r['id'], name=r['name'], description=r['description'], expressionType=r['expression_type'],
                      **self._common(r))
@@ -146,7 +146,7 @@ class Store:
         self._exec('DELETE FROM cohort_generation_info WHERE cohort_definition_id = ?', [cid])
         self._exec('DELETE FROM cohort_definition WHERE id = ?', [cid])
 
-    # ---- 생성 이력
+    # ---- generation history
     def set_generation(self, cid, source_id, **fields):
         with self.lock:
             rows = self._rows('SELECT * FROM cohort_generation_info WHERE cohort_definition_id=? AND source_id=?',
@@ -169,7 +169,7 @@ class Store:
                  'personCount': r['person_count'], 'recordCount': r['record_count'], 'createdBy': self.user}
                 for r in self._rows('SELECT * FROM cohort_generation_info WHERE cohort_definition_id=?', [cid])]
 
-    # ---- 작업
+    # ---- jobs
     def start_job(self, job_name, parameters):
         jid = self._next('seq_job')
         self._exec('INSERT INTO job_execution VALUES (?,?,?,?,?,?,?)',

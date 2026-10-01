@@ -1,6 +1,6 @@
-"""PhenotypeLibrary 코호트를 duckcdm 으로 SQL 생성 → DuckDB 방언 번역 → 실행.
+"""Generate SQL for PhenotypeLibrary cohorts with duckcdm -> translate to the DuckDB dialect -> execute.
 
-python3 run_phenotypes.py <cdm.duckdb (복사본)> <cohorts dir> [개수]
+python3 run_phenotypes.py <cdm.duckdb (a copy)> <cohorts dir> [count]
 """
 import glob, os, sys, threading, time
 
@@ -17,7 +17,7 @@ TIMEOUT = float(os.environ.get('COHORT_TIMEOUT', '30'))
 t0 = time.time()
 for f in files:
     cid = int(os.path.basename(f).split('.')[0])
-    con = duckdb.connect(db)          # 코호트마다 새 세션(임시 테이블 격리) — WebAPI 와 같다
+    con = duckdb.connect(db)          # new session per cohort (isolates temp tables) — same as WebAPI
     tgt = os.environ.get('E2E_TARGET', 'main.cohort')
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {tgt.split('.')[0]}")
     con.execute(f'CREATE TABLE IF NOT EXISTS {tgt} (cohort_definition_id INTEGER, subject_id BIGINT, '

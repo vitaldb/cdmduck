@@ -1,4 +1,4 @@
-"""OHDSI SqlRender 의 파이썬 이식 — Java 판과 출력이 글자 단위로 같도록 맞춘다.
+"""Python port of OHDSI SqlRender — output matches the Java version character for character.
 
     from duckcdm.sqlrender import render, translate
     sql = render("SELECT * FROM @cdm.person {@limit}?{LIMIT 10}", cdm="main", limit=True)
@@ -17,7 +17,7 @@ __all__ = ['render', 'translate', 'translate_single_statement', 'split_sql', 're
 
 
 def _value(v):
-    """R SqlRender 와 같은 값 변환: 논리값은 TRUE/FALSE, 목록은 쉼표로 잇는다."""
+    """Value conversion as in R SqlRender: booleans become TRUE/FALSE, lists are joined with commas."""
     if isinstance(v, bool):
         return 'TRUE' if v else 'FALSE'
     if isinstance(v, (list, tuple, set)):

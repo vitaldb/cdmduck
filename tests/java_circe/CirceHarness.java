@@ -4,7 +4,7 @@ import java.util.*;
 import org.ohdsi.circe.cohortdefinition.*;
 import org.ohdsi.circe.vocabulary.*;
 
-/** 한 줄 = op \t b64(json) \t b64(options json 또는 빈칸) → "O" b64(결과) | "E" b64(예외) */
+/** one line = op \t b64(json) \t b64(options json or empty) -> "O" b64(result) | "E" b64(exception) */
 public class CirceHarness {
 	static String d(String s) { return new String(Base64.getDecoder().decode(s), StandardCharsets.UTF_8); }
 	static String e(String s) { return Base64.getEncoder().encodeToString(s.getBytes(StandardCharsets.UTF_8)); }

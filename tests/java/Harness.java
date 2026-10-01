@@ -3,7 +3,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import org.ohdsi.sql.*;
 
-/** 한 줄 = op \t dialect \t b64(sql) \t b64(k):b64(v),...  →  한 줄 = "O" b64(결과) | "E" b64(예외클래스: 메시지) */
+/** one line = op \t dialect \t b64(sql) \t b64(k):b64(v),...  ->  one line = "O" b64(result) | "E" b64(exceptionClass: message) */
 public class Harness {
 	static String d(String s) { return new String(Base64.getDecoder().decode(s), StandardCharsets.UTF_8); }
 	static String e(String s) { return Base64.getEncoder().encodeToString(s.getBytes(StandardCharsets.UTF_8)); }

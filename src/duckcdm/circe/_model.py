@@ -1,7 +1,7 @@
-"""circe-be 의 코호트 정의 모델과 Jackson(2.11, OHDSI Utils 설정) 역직렬화 흉내.
+"""circe-be cohort definition model and emulation of Jackson (2.11, OHDSI Utils config) deserialization.
 
-설정: FAIL_ON_UNKNOWN_PROPERTIES 끔, 이름은 대소문자 구분, 나머지는 Jackson 기본값
-(실수→정수 절단, 문자열→수 변환, null→원시형 기본값, 열거형은 이름 또는 순번).
+Config: FAIL_ON_UNKNOWN_PROPERTIES off, case-sensitive names, otherwise Jackson defaults
+(float->int truncation, string->number coercion, null->primitive default, enums by name or ordinal).
 """
 import json
 
@@ -40,11 +40,11 @@ def _int_like(v, lo, hi, kind, primitive):
             raise CirceError(f'InputCoercionException: Numeric value ({v}) out of range of {kind}')
         return v
     if isinstance(v, float):
-        if v != v or not lo <= v <= hi + 0.999999:     # Jackson: 범위 밖 실수는 오류
+        if v != v or not lo <= v <= hi + 0.999999:     # Jackson: out-of-range float is an error
             if v != v:
                 return 0
             raise CirceError(f'InputCoercionException: Numeric value ({v}) out of range of {kind}')
-        return int(v)                                   # 0 쪽으로 절단
+        return int(v)                                   # truncate toward zero
     if isinstance(v, str):
         r = _parse_int_text(v, lo, hi, kind)
         return (0 if primitive else None) if r is None else r
@@ -101,7 +101,7 @@ def to_str(v):
 
 
 class JNumber:
-    """java.lang.Number (Integer/Long/BigInteger/Double) 값."""
+    """java.lang.Number (Integer/Long/BigInteger/Double) value."""
     __slots__ = ('v', 'kind')
 
     def __init__(self, v, kind):
@@ -147,7 +147,7 @@ def to_number(v):
 
 
 def enum_of(names):
-    """이름 또는 순번으로."""
+    """By name or ordinal."""
     def conv(v):
         if v is None:
             return None
@@ -176,7 +176,7 @@ def array_of(conv):
 
 
 class Bean:
-    """필드 정의: _fields = [(json 이름, 속성, 변환함수, 기본값 함수)]."""
+    """Field definitions: _fields = [(json name, attribute, converter, default factory)]."""
     _fields = ()
 
     def __init__(self):
@@ -209,7 +209,7 @@ def bean(cls):
     return cls.parse
 
 
-# ---- 어휘 -------------------------------------------------------------------
+# ---- vocabulary --------------------------------------------------------------
 
 class Concept(Bean):
     _fields = [('CONCEPT_ID', 'concept_id', to_long, None), ('CONCEPT_NAME', 'concept_name', to_str, None),
@@ -228,7 +228,7 @@ class ConceptSetExpression(Bean):
     _fields = [('items', 'items', array_of(ConceptSetItem.parse), None)]
 
 
-# ---- 코호트 정의 -------------------------------------------------------------
+# ---- cohort definition -------------------------------------------------------
 
 class ConceptSet(Bean):
     _fields = [('id', 'id', to_int, 0), ('name', 'name', to_str, None),
@@ -348,7 +348,7 @@ class Criteria(Bean):
 
 
 def _common(*names):
-    """여러 기준에 되풀이되는 필드들."""
+    """Fields repeated across many criteria."""
     table = {
         'CodesetId': ('codeset_id', to_integer, None), 'First': ('first', to_boolean, None),
         'OccurrenceStartDate': ('occurrence_start_date', _dr, None),
@@ -550,7 +550,7 @@ CRITERIA_TYPES = {c.TYPE: c for c in (ConditionEra, ConditionOccurrence, Death, 
 
 
 def _wrapper(types, what):
-    """@JsonTypeInfo(WRAPPER_OBJECT): {"타입이름": {...}} — 키는 정확히 하나."""
+    """@JsonTypeInfo(WRAPPER_OBJECT): {"TypeName": {...}} — exactly one key."""
     def parse(v):
         if v is None:
             return None

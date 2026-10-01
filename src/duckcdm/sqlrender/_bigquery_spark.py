@@ -1,4 +1,4 @@
-"""org.ohdsi.sql.BigQuerySparkTranslate 포팅 (DB 연결이 필요한 sparkHandleInsert 는 제외)."""
+"""org.ohdsi.sql.BigQuerySparkTranslate port (excluding sparkHandleInsert, which needs a DB connection)."""
 import re
 
 from ._java import JavaError, split, substring, trim
@@ -83,7 +83,7 @@ class _CommaListIterator:
 
 
 def _s(x):
-    """Java 문자열 연결: null 은 "null"."""
+    """Java string concatenation: null becomes "null"."""
     return 'null' if x is None else x
 
 

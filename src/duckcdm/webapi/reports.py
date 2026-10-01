@@ -1,4 +1,4 @@
-"""데이터 소스 보고서 (WebAPI CDMResultsAnalysisRunner 포팅): Achilles 결과 → ATLAS 화면이 받는 JSON."""
+"""Data source reports (port of WebAPI CDMResultsAnalysisRunner): Achilles results -> the JSON the ATLAS UI expects."""
 import datetime
 import decimal
 import os
@@ -28,7 +28,7 @@ def _json_value(v):
 
 
 def _get(row, key):
-    """대소문자 무시 열 조회 (Java ResultSet.getXxx(label) 처럼)."""
+    """Case-insensitive column lookup (like Java ResultSet.getXxx(label))."""
     for k, v in row.items():
         if k.lower() == key.lower():
             return v
@@ -43,7 +43,7 @@ def _float(v):
     return float(v) if v is not None else 0.0
 
 
-# Java 행 매퍼들 (원시형 필드는 null → 0)
+# Java row mappers (primitive fields: null -> 0)
 MAPPERS = {
     'attribute': lambda r: {'attributeName': _get(r, 'ATTRIBUTE_NAME'), 'attributeValue': _get(r, 'ATTRIBUTE_VALUE')},
     'distribution': lambda r: {'intervalIndex': _int(_get(r, 'INTERVALINDEX')),
@@ -110,7 +110,7 @@ class Reports:
     def __init__(self, source):
         self.s = source
 
-    # -- 준비
+    # -- preparation
     def ready(self):
         cur = self.s.cursor()
         n = cur.execute("select count(*) from information_schema.tables where table_schema = ? and "
@@ -118,7 +118,7 @@ class Reports:
         return n > 0
 
     def build(self, log=None):
-        """Achilles 분석 + concept_hierarchy. 결과 스키마를 새로 채운다."""
+        """Achilles analyses + concept_hierarchy. Repopulates the results schema."""
         s = self.s
         with s.lock:
             cur = s.cursor()
@@ -136,7 +136,7 @@ class Reports:
                                     results_schema=s.results_schema, vocab_schema=s.vocab_schema), cur)
         return done, failed
 
-    # -- 조회
+    # -- queries
     def _rows(self, rel, concept_id=None):
         s = self.s
         with open(os.path.join(_DIR, rel), encoding='utf-8') as f:
