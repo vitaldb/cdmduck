@@ -1,2 +1,4 @@
 OHDSI/SqlRender 978673f61677702ca784f6cd525d448956460ca5 (Fri Sep 18 15:06:00 2026 +0200)
 OHDSI/circe-be 021150e76804491b1a646dfa11ad09bafda2931a (Thu Sep 24 16:33:02 2026 -0400)
+OHDSI/WebAPI (branch webapi-3.0) ba0f901fc442c385bf28d02add97dc684b9458bd (Fri Sep 25 07:38:56 2026 +0800)
+OHDSI/Atlas3 d9252fed4b700292f1a1a3211c06927f8e7ab64d (Tue Sep 29 11:42:59 2026 -0400) — built dist bundled in src/cdmduck/webapi/static/atlas

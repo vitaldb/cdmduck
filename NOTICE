@@ -14,3 +14,9 @@ Sciences and Informatics, licensed under the Apache License, Version 2.0:
   - src/cdmduck/circe (Python port of org.ohdsi.circe cohort SQL generation)
   - src/cdmduck/circe/sql (SQL templates, verbatim)
   - tests/java_circe/org, tests/java_circe/resources (verbatim Java reference sources)
+
+This product bundles a built copy of OHDSI Atlas3 (https://github.com/OHDSI/Atlas3),
+Copyright Observational Health Data Sciences and Informatics, Apache License 2.0,
+in src/cdmduck/webapi/static/atlas (unmodified build; config/plugins.json emptied), and
+SQL resources from OHDSI WebAPI (https://github.com/OHDSI/WebAPI, branch webapi-3.0),
+Apache License 2.0, in src/cdmduck/webapi/sql.

@@ -15,7 +15,7 @@ pip install cdmduck
 |---|---|---|
 | `cdmduck.sqlrender` | SqlRender (Java) | 이식 완료 — Java 판과 58,440 건 글자 단위 일치 |
 | `cdmduck.circe` | circe-be (Java) | 이식 완료 — Java 판과 32,937 건 비교, 결과가 다른 것 0 건(PhenotypeLibrary 1,104 코호트 포함) |
-| `cdmduck.webapi` | WebAPI 3.0 (Java) — ATLAS 3.0 화면이 부르는 API | 예정 |
+| `cdmduck.webapi` | WebAPI 3.0 (Java) — ATLAS 3.0 화면이 부르는 API | 1차 — 어휘 검색·개념집합·코호트 정의·생성·포함규칙 보고서. ATLAS 3.0 화면을 함께 담았다 |
 
 ```python
 from cdmduck.sqlrender import render, translate
@@ -30,10 +30,18 @@ duck = translate(render(sql), "duckdb")
 ```
 
 ```
+pip install "cdmduck[server]"
+cdmduck serve EUNOMIA=cdm.duckdb            # http://127.0.0.1:8080/ 에 ATLAS 3.0, /WebAPI 에 API
 cdmduck cohort cohort.json duckdb --cdm main --results main --cohort-id 1
 cdmduck translate query.sql duckdb -p cdm=main
 cdmduck dialects
 ```
+
+## 서버 (`cdmduck serve`)
+
+DuckDB 파일 하나가 WebAPI 의 소스 하나(CDM·어휘·결과 스키마). 결과 스키마(`results`)와 코호트 결과 테이블은
+없으면 만든다. 개념집합·코호트 정의는 첫 DB 옆 `cdmduck_store.duckdb` 에 저장한다. 로그인은 없다(관리자 한 명).
+아직 없는 것: 데이터 소스 보고서(Achilles), 특성화·발생률·경로 분석, 버전 이력, 태그.
 
 ## Java 판과의 동등성 검증
 

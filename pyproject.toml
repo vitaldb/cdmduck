@@ -26,7 +26,7 @@ Homepage = "https://github.com/vitaldb/cdmduck"
 Source = "https://github.com/vitaldb/cdmduck"
 
 [project.optional-dependencies]
-server = ["duckdb>=1.0", "fastapi", "uvicorn"]
+server = ["duckdb>=1.0", "fastapi>=0.100", "uvicorn>=0.20"]
 
 [project.scripts]
 cdmduck = "cdmduck.cli:main"
@@ -37,3 +37,4 @@ where = ["src"]
 [tool.setuptools.package-data]
 "cdmduck.sqlrender" = ["csv/*.csv"]
 "cdmduck.circe" = ["sql/*.sql"]
+"cdmduck.webapi" = ["sql/*/*.sql", "static/atlas/*", "static/atlas/*/*", "static/atlas/*/*/*"]
