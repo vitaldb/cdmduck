@@ -108,11 +108,7 @@ def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=
                      smallCellCount=small_cell_count if small_cell_count is not None else '')
         _run(con, sql)
 
-    fields = _schema('schema_achilles_results_concept_count.csv')
-    _run(con, render(_sql('create_result_concept_table.sql'), resultsDatabaseSchema=results_schema,
-                     vocabDatabaseSchema=vocab_schema, fieldNames=', '.join(n for n, _ in fields)))
-
-    _add_person_counts(con, results_schema, vocab_schema)
+    build_concept_counts(con, results_schema, vocab_schema)
 
     con.execute(f'DROP TABLE IF EXISTS {results_schema}.achilles_analysis')
     con.execute(f'CREATE TABLE {results_schema}.achilles_analysis (analysis_id INTEGER, analysis_name VARCHAR, '
@@ -129,29 +125,59 @@ def run_achilles(con, cdm_schema='main', results_schema='results', vocab_schema=
     return done, failed
 
 
-# Per-concept person count analyses (person counts of '… by concept'). WebAPI's achilles_result_concept_count also has PC and DPC columns.
+# Analyses that feed record counts (same lists as Achilles' create_result_concept_table.sql)
+RC_MAX_ANALYSES = (2, 4, 5, 201, 225, 301, 325, 401, 425, 501, 505, 525, 601, 625, 701, 725, 801, 825, 826, 827, 901,
+                   1001, 1201, 1425, 1801, 1825, 1826, 1827, 2101, 2125, 2301)
+RC_SUM_ANALYSES = (405, 605, 705, 805, 807, 1805, 1807, 2105)
+# Per-concept person count analyses; WebAPI's achilles_result_concept_count also has PC and DPC columns
 PERSON_COUNT_ANALYSES = (200, 400, 600, 700, 800, 900, 1000, 1800, 2100)
 
 
-def _add_person_counts(con, results_schema, vocab_schema):
-    """Attach person counts the same way as record_count/descendant_record_count (self = max, descendants = sum)."""
-    ids = ','.join(map(str, PERSON_COUNT_ANALYSES))
+def build_concept_counts(con, results_schema, vocab_schema):
+    """achilles_result_concept_count with the same values as Achilles' create_result_concept_table.sql
+    (record_count = MAX over the concept's own counts, descendant_record_count = SUM over its descendants
+    including itself), plus person_count / descendant_person_count computed the same way.
+
+    Achilles joins every (ancestor, descendant) pair of the whole vocabulary before aggregating, which needs
+    tens of GB on a full vocabulary. Here only pairs whose descendant has a count are joined. One quirk of the
+    original is kept: a concept that appears in both count lists gets its descendant sum counted once per list.
+    """
     rs, vs = results_schema, vocab_schema
+    rc_max = ','.join(map(str, RC_MAX_ANALYSES))
+    rc_sum = ','.join(map(str, RC_SUM_ANALYSES))
+    pc_ids = ','.join(map(str, PERSON_COUNT_ANALYSES))
     con.execute(f"""
         CREATE OR REPLACE TABLE {rs}.achilles_result_concept_count AS
-        WITH pc AS (
+        WITH counts AS (
             SELECT stratum_1 AS concept_id, MAX(count_value) AS cnt FROM {rs}.achilles_results
-            WHERE analysis_id IN ({ids}) GROUP BY stratum_1),
-        concepts AS (
-            SELECT CAST(ancestor_concept_id AS VARCHAR) a, CAST(descendant_concept_id AS VARCHAR) d
-            FROM {vs}.concept_ancestor
-            UNION SELECT CAST(concept_id AS VARCHAR), CAST(concept_id AS VARCHAR) FROM {vs}.concept),
-        agg AS (
-            SELECT c.a AS concept_id, COALESCE(MAX(p1.cnt), 0) AS person_count,
-                   COALESCE(SUM(p2.cnt), 0) AS descendant_person_count
-            FROM concepts c LEFT JOIN pc p1 ON c.a = p1.concept_id LEFT JOIN pc p2 ON c.d = p2.concept_id
-            GROUP BY c.a)
-        SELECT r.concept_id, r.record_count, r.descendant_record_count,
-               CAST(COALESCE(a.person_count, 0) AS BIGINT) AS person_count,
-               CAST(COALESCE(a.descendant_person_count, 0) AS BIGINT) AS descendant_person_count
-        FROM {rs}.achilles_result_concept_count r LEFT JOIN agg a ON CAST(r.concept_id AS VARCHAR) = a.concept_id""")
+            WHERE analysis_id IN ({rc_max}) GROUP BY stratum_1
+            UNION
+            SELECT stratum_2 AS concept_id, SUM(count_value) AS cnt FROM {rs}.achilles_results
+            WHERE analysis_id IN ({rc_sum}) GROUP BY stratum_2),
+        pcounts AS (
+            SELECT stratum_1 AS concept_id, MAX(count_value) AS cnt FROM {rs}.achilles_results
+            WHERE analysis_id IN ({pc_ids}) GROUP BY stratum_1),
+        counted AS (SELECT concept_id FROM counts UNION SELECT concept_id FROM pcounts),
+        pairs AS (
+            SELECT DISTINCT CAST(ca.ancestor_concept_id AS VARCHAR) AS a, CAST(ca.descendant_concept_id AS VARCHAR) AS d
+            FROM {vs}.concept_ancestor ca
+            WHERE CAST(ca.descendant_concept_id AS VARCHAR) IN (SELECT concept_id FROM counted)
+            UNION
+            SELECT concept_id, concept_id FROM counted),
+        own AS (SELECT concept_id, MAX(cnt) AS rc, COUNT(*) AS mult FROM counts GROUP BY concept_id),
+        own_p AS (SELECT concept_id, MAX(cnt) AS pc FROM pcounts GROUP BY concept_id),
+        drc AS (SELECT p.a, SUM(c.cnt) AS s FROM pairs p JOIN counts c ON p.d = c.concept_id GROUP BY p.a),
+        dpc AS (SELECT p.a, SUM(c.cnt) AS s FROM pairs p JOIN pcounts c ON p.d = c.concept_id GROUP BY p.a),
+        ids AS (
+            SELECT CAST(ancestor_concept_id AS VARCHAR) AS concept_id FROM {vs}.concept_ancestor
+            UNION SELECT CAST(concept_id AS VARCHAR) FROM {vs}.concept)
+        SELECT ids.concept_id,
+               COALESCE(own.rc, 0) AS record_count,
+               COALESCE(drc.s, 0) * COALESCE(own.mult, 1) AS descendant_record_count,
+               CAST(COALESCE(own_p.pc, 0) AS BIGINT) AS person_count,
+               CAST(COALESCE(dpc.s, 0) AS BIGINT) AS descendant_person_count
+        FROM ids
+        LEFT JOIN own ON own.concept_id = ids.concept_id
+        LEFT JOIN own_p ON own_p.concept_id = ids.concept_id
+        LEFT JOIN drc ON drc.a = ids.concept_id
+        LEFT JOIN dpc ON dpc.a = ids.concept_id""")
