@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import __version__
 from ..circe import CirceError, build_cohort_query, build_concept_set_query
 from ..sqlrender import render, translate
+from .reports import Reports
 from .sources import Source, like_text, q, q_in, sql_resource
 from .store import Store, now_ms
 
@@ -68,6 +69,7 @@ def create_app(sources, store, title='cdmduck'):
     app = FastAPI(title=title, version=__version__, docs_url='/WebAPI/docs', openapi_url='/WebAPI/openapi.json')
     by_key = {s.key: s for s in sources}
     by_id = {s.source_id: s for s in sources}
+    reports = {s.key: Reports(s) for s in sources}
 
     def src(key):
         s = by_key.get(key)
@@ -260,7 +262,64 @@ def create_app(sources, store, title='cdmduck'):
 
     @app.post('/WebAPI/cdmresults/{key}/conceptRecordCount')
     async def concept_record_count(key, request: Request):
-        return []                       # Achilles 결과가 없으므로 비움 (화면은 RC/DRC 를 비워 보여 준다)
+        s = src(key)
+        ids = [int(x) for x in await request.json()]
+        if not ids or not reports[key].ready():
+            return []
+        rows = s.cursor().execute(
+            f'select concept_id, record_count, descendant_record_count, person_count, descendant_person_count '
+            f'from {s.results_schema}.achilles_result_concept_count where concept_id in ({",".join(map(str, ids))})'
+        ).fetchall()
+        return [{str(r[0]): [int(x or 0) for x in r[1:]]} for r in rows]
+
+    # ---- 데이터 소스 보고서 (Achilles) ----------------------------------------------
+    def rep(key):
+        src(key)
+        r = reports[key]
+        if not r.ready():
+            raise HTTPException(404, 'Achilles results not built for this source: run "cdmduck achilles" '
+                                     'or POST /WebAPI/cdmresults/{key}/achilles')
+        return r
+
+    @app.post('/WebAPI/cdmresults/{key}/achilles')
+    def build_achilles(key):
+        src(key)
+        done, failed = reports[key].build()
+        return {'analyses': len(done), 'failed': [{'analysisId': a, 'error': e} for a, e in failed]}
+
+    @app.get('/WebAPI/cdmresults/{key}/dashboard')
+    def dashboard(key):
+        return rep(key).dashboard()
+
+    @app.get('/WebAPI/cdmresults/{key}/person')
+    def person_report(key):
+        return rep(key).person()
+
+    @app.get('/WebAPI/cdmresults/{key}/datadensity')
+    def data_density(key):
+        return rep(key).data_density()
+
+    @app.get('/WebAPI/cdmresults/{key}/death')
+    def death_report(key):
+        return rep(key).death()
+
+    @app.get('/WebAPI/cdmresults/{key}/observationPeriod')
+    def observation_period_report(key):
+        return rep(key).observation_period()
+
+    @app.get('/WebAPI/cdmresults/{key}/{domain}')
+    def treemap(key, domain):
+        r = rep(key)
+        if not r.has_domain(domain):
+            raise HTTPException(404, f'unknown report domain {domain}')
+        return r.treemap(domain)
+
+    @app.get('/WebAPI/cdmresults/{key}/{domain}/{cid}')
+    def drilldown(key, domain, cid: int):
+        r = rep(key)
+        if not r.has_domain(domain):
+            raise HTTPException(404, f'unknown report domain {domain}')
+        return r.drilldown(domain, cid)
 
     # ---- 개념집합 ---------------------------------------------------------------
     @app.get('/WebAPI/conceptset')

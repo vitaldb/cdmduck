@@ -1,0 +1,8 @@
+field_name,field_type
+analysis_id,int
+stratum_1,varchar(255)
+stratum_2,varchar(255)
+stratum_3,varchar(255)
+stratum_4,varchar(255)
+stratum_5,varchar(255)
+count_value,bigint

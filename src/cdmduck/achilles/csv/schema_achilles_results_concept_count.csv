@@ -1,0 +1,4 @@
+field_name,field_type
+concept_id,int
+record_count,bigint
+descendant_record_count,bigint

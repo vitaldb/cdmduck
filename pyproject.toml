@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cdmduck"
-version = "0.1.0"
+version = "0.2.0"
 description = "OMOP CDM / OHDSI ATLAS-compatible tools on DuckDB: SqlRender, Circe and a WebAPI-compatible server in pure Python"
 readme = "README.md"
 license = "Apache-2.0"
@@ -37,4 +37,5 @@ where = ["src"]
 [tool.setuptools.package-data]
 "cdmduck.sqlrender" = ["csv/*.csv"]
 "cdmduck.circe" = ["sql/*.sql"]
-"cdmduck.webapi" = ["sql/*/*.sql", "static/atlas/*", "static/atlas/*/*", "static/atlas/*/*/*"]
+"cdmduck.achilles" = ["sql/*.sql", "csv/*.csv"]
+"cdmduck.webapi" = ["sql/*/*.sql", "sql/*/*/*.sql", "sql/*/*/*/*.sql", "static/atlas/*", "static/atlas/*/*", "static/atlas/*/*/*"]

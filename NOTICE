@@ -20,3 +20,6 @@ Copyright Observational Health Data Sciences and Informatics, Apache License 2.0
 in src/cdmduck/webapi/static/atlas (unmodified build; config/plugins.json emptied), and
 SQL resources from OHDSI WebAPI (https://github.com/OHDSI/WebAPI, branch webapi-3.0),
 Apache License 2.0, in src/cdmduck/webapi/sql.
+
+This product includes SQL and CSV resources from OHDSI Achilles (https://github.com/OHDSI/Achilles),
+Apache License 2.0, in src/cdmduck/achilles.

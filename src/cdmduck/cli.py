@@ -21,6 +21,13 @@ def main(argv=None):
     sv.add_argument('--host', default='127.0.0.1')
     sv.add_argument('--port', type=int, default=8080)
     sv.add_argument('--user', default='admin')
+    sv.add_argument('--achilles', action='store_true', help='Achilles 결과가 없으면 시작할 때 계산 (데이터 소스 보고서용)')
+    ac = sub.add_parser('achilles', help='데이터 소스 보고서용 Achilles 분석을 DuckDB 에서 계산')
+    ac.add_argument('db')
+    ac.add_argument('--cdm', default='main')
+    ac.add_argument('--vocab')
+    ac.add_argument('--results', default='results')
+    ac.add_argument('--small-cell', type=int, default=5, help='이 수 이하의 셀은 지운다 (Achilles 기본 5)')
     c = sub.add_parser('cohort', help='코호트 정의(ATLAS/Circe JSON) → 대상 방언 SQL')
     c.add_argument('file', help="코호트 JSON ('-' 는 표준입력)")
     c.add_argument('dialect', nargs='?', default='duckdb')
@@ -44,11 +51,32 @@ def main(argv=None):
             key, _, path = spec.rpartition('=') if '=' in spec else ('', '', spec)
             key = key or os.path.splitext(os.path.basename(path))[0].upper()
             sources.append(Source(i, key, key, path, a.cdm, a.vocab, a.results))
+        if a.achilles:
+            from .webapi.reports import Reports
+            for s in sources:
+                r = Reports(s)
+                if not r.ready():
+                    print(f'{s.key}: Achilles 분석 계산 중…')
+                    done, failed = r.build()
+                    print(f'{s.key}: {len(done)} 분석 완료, 실패 {len(failed)}')
         store_path = a.store or os.path.join(os.path.dirname(os.path.abspath(sources[0].path)), 'cdmduck_store.duckdb')
         app = create_app(sources, Store(store_path, a.user))
         print(f'cdmduck {__import__("cdmduck").__version__}: http://{a.host}:{a.port}/  (API: /WebAPI, store: {store_path})')
         uvicorn.run(app, host=a.host, port=a.port, log_level='warning')
         return 0
+    if a.cmd == 'achilles':
+        import time
+        import duckdb
+        from .achilles import run_achilles
+        from .webapi.reports import Reports
+        from .webapi.sources import Source
+        t0 = time.time()
+        src = Source(1, 'CDM', 'CDM', a.db, a.cdm, a.vocab, a.results)
+        done, failed = Reports(src).build(log=print)
+        print(f'{len(done)} analyses, {len(failed)} failed, {time.time() - t0:.1f}s')
+        for aid, err in failed:
+            print('  FAILED', aid, err)
+        return 1 if failed else 0
     if a.cmd == 'cohort':
         from .circe import build_cohort_query
         text = sys.stdin.read() if a.file == '-' else open(a.file, encoding='utf-8').read()
